@@ -1,0 +1,325 @@
+generator client {
+  provider = "prisma-client-js"
+}
+
+datasource db {
+  provider = "postgresql"
+}
+
+enum ProjectStatus {
+  DRAFT
+  PLANNED
+  ACTIVE
+  BLOCKED
+  ON_HOLD
+  COMPLETED
+  ARCHIVED
+}
+
+enum TaskStatus {
+  INBOX
+  TODO
+  IN_PROGRESS
+  BLOCKED
+  DONE
+  CANCELED
+}
+
+enum PriorityLevel {
+  LOW
+  MEDIUM
+  HIGH
+  CRITICAL
+}
+
+enum IdeaStatus {
+  CAPTURED
+  REVIEWING
+  APPROVED
+  REJECTED
+  PARKED
+  CONVERTED
+}
+
+enum KnowledgeStatus {
+  DRAFT
+  ACTIVE
+  ARCHIVED
+}
+
+enum DecisionStatus {
+  PROPOSED
+  ACCEPTED
+  SUPERSEDED
+  REJECTED
+}
+
+enum KnowledgeType {
+  NOTE
+  SOP
+  DECISION
+  RESEARCH
+  REFERENCE
+  LESSON
+  DEFINITION
+}
+
+enum ResourceType {
+  REPO
+  DOCUMENT
+  FOLDER
+  TOOL
+  SERVICE
+  BOARD
+  CALENDAR
+  LINK
+}
+
+model User {
+  id                String             @id @default(cuid())
+  email             String             @unique
+  displayName       String
+  timezone          String             @default("America/New_York")
+  isOwner           Boolean            @default(false)
+  createdAt         DateTime           @default(now())
+  updatedAt         DateTime           @updatedAt
+  projects          Project[]
+  tasks             Task[]
+  knowledgeItems    KnowledgeItem[]
+  decisions         Decision[]
+  externalResources ExternalResource[]
+}
+
+model Role {
+  id          String    @id @default(cuid())
+  slug        String    @unique
+  name        String
+  description String?
+  sortOrder   Int       @default(0)
+  isActive    Boolean   @default(true)
+  createdAt   DateTime  @default(now())
+  updatedAt   DateTime  @updatedAt
+  projects    Project[]
+  tasks       Task[]
+  ideas       Idea[]
+}
+
+model Project {
+  id              String                   @id @default(cuid())
+  slug            String                   @unique
+  name            String
+  summary         String
+  description     String?
+  status          ProjectStatus            @default(DRAFT)
+  primaryRoleId   String?
+  ownerId         String
+  priority        PriorityLevel            @default(MEDIUM)
+  targetStartAt   DateTime?
+  targetEndAt     DateTime?
+  lastReviewedAt  DateTime?
+  isActive        Boolean                  @default(true)
+  createdAt       DateTime                 @default(now())
+  updatedAt       DateTime                 @updatedAt
+  primaryRole     Role?                    @relation(fields: [primaryRoleId], references: [id])
+  owner           User                     @relation(fields: [ownerId], references: [id])
+  tasks           Task[]
+  decisions       Decision[]
+  knowledgeLinks  ProjectKnowledgeItem[]
+  resourceLinks   ProjectExternalResource[]
+  tags            ProjectTag[]
+  convertedIdeas  Idea[]                   @relation("IdeaToProject")
+
+  @@index([status])
+  @@index([primaryRoleId])
+  @@index([updatedAt])
+}
+
+model Task {
+  id             String              @id @default(cuid())
+  projectId      String?
+  roleId         String?
+  ownerId        String
+  title          String
+  description    String?
+  status         TaskStatus          @default(INBOX)
+  priority       PriorityLevel       @default(MEDIUM)
+  dueAt          DateTime?
+  completedAt    DateTime?
+  blockedReason  String?
+  sortOrder      Int?
+  createdAt      DateTime            @default(now())
+  updatedAt      DateTime            @updatedAt
+  project        Project?            @relation(fields: [projectId], references: [id])
+  role           Role?               @relation(fields: [roleId], references: [id])
+  owner          User                @relation(fields: [ownerId], references: [id])
+  knowledgeLinks TaskKnowledgeItem[]
+  tags           TaskTag[]
+
+  @@index([status])
+  @@index([projectId])
+  @@index([dueAt])
+  @@index([updatedAt])
+}
+
+model Idea {
+  id                String      @id @default(cuid())
+  roleId            String?
+  title             String
+  summary           String
+  problem           String?
+  opportunity       String?
+  status            IdeaStatus  @default(CAPTURED)
+  decisionNotes     String?
+  convertedProjectId String?
+  createdAt         DateTime    @default(now())
+  updatedAt         DateTime    @updatedAt
+  role              Role?       @relation(fields: [roleId], references: [id])
+  convertedProject  Project?    @relation("IdeaToProject", fields: [convertedProjectId], references: [id])
+
+  @@index([status])
+  @@index([updatedAt])
+}
+
+model KnowledgeItem {
+  id             String                    @id @default(cuid())
+  type           KnowledgeType
+  title          String
+  summary        String?
+  bodyMarkdown   String
+  status         KnowledgeStatus           @default(DRAFT)
+  sourceNotes    String?
+  ownerId        String
+  reviewedAt     DateTime?
+  createdAt      DateTime                  @default(now())
+  updatedAt      DateTime                  @updatedAt
+  owner          User                      @relation(fields: [ownerId], references: [id])
+  projectLinks   ProjectKnowledgeItem[]
+  taskLinks      TaskKnowledgeItem[]
+  resourceLinks  KnowledgeExternalResource[]
+  tags           KnowledgeItemTag[]
+
+  @@index([status])
+  @@index([type])
+  @@index([updatedAt])
+}
+
+model Decision {
+  id             String                   @id @default(cuid())
+  projectId      String?
+  title          String
+  summary        String
+  rationale      String
+  status         DecisionStatus           @default(PROPOSED)
+  decidedAt      DateTime?
+  ownerId        String
+  createdAt      DateTime                 @default(now())
+  updatedAt      DateTime                 @updatedAt
+  project        Project?                 @relation(fields: [projectId], references: [id])
+  owner          User                     @relation(fields: [ownerId], references: [id])
+  resourceLinks  DecisionExternalResource[]
+
+  @@index([status])
+  @@index([projectId])
+}
+
+model ExternalResource {
+  id             String                   @id @default(cuid())
+  type           ResourceType
+  title          String
+  url            String
+  description    String?
+  systemName     String?
+  ownerId        String
+  createdAt      DateTime                 @default(now())
+  updatedAt      DateTime                 @updatedAt
+  owner          User                     @relation(fields: [ownerId], references: [id])
+  projectLinks   ProjectExternalResource[]
+  knowledgeLinks KnowledgeExternalResource[]
+  decisionLinks  DecisionExternalResource[]
+
+  @@index([type])
+  @@index([updatedAt])
+}
+
+model Tag {
+  id             String             @id @default(cuid())
+  slug           String             @unique
+  name           String
+  color          String?
+  createdAt      DateTime           @default(now())
+  projectLinks   ProjectTag[]
+  taskLinks      TaskTag[]
+  knowledgeLinks KnowledgeItemTag[]
+}
+
+model ProjectKnowledgeItem {
+  projectId       String
+  knowledgeItemId String
+  project         Project       @relation(fields: [projectId], references: [id], onDelete: Cascade)
+  knowledgeItem   KnowledgeItem @relation(fields: [knowledgeItemId], references: [id], onDelete: Cascade)
+
+  @@id([projectId, knowledgeItemId])
+}
+
+model TaskKnowledgeItem {
+  taskId          String
+  knowledgeItemId String
+  task            Task          @relation(fields: [taskId], references: [id], onDelete: Cascade)
+  knowledgeItem   KnowledgeItem @relation(fields: [knowledgeItemId], references: [id], onDelete: Cascade)
+
+  @@id([taskId, knowledgeItemId])
+}
+
+model ProjectExternalResource {
+  projectId          String
+  externalResourceId String
+  project            Project          @relation(fields: [projectId], references: [id], onDelete: Cascade)
+  externalResource   ExternalResource @relation(fields: [externalResourceId], references: [id], onDelete: Cascade)
+
+  @@id([projectId, externalResourceId])
+}
+
+model KnowledgeExternalResource {
+  knowledgeItemId    String
+  externalResourceId String
+  knowledgeItem      KnowledgeItem    @relation(fields: [knowledgeItemId], references: [id], onDelete: Cascade)
+  externalResource   ExternalResource @relation(fields: [externalResourceId], references: [id], onDelete: Cascade)
+
+  @@id([knowledgeItemId, externalResourceId])
+}
+
+model DecisionExternalResource {
+  decisionId         String
+  externalResourceId String
+  decision           Decision         @relation(fields: [decisionId], references: [id], onDelete: Cascade)
+  externalResource   ExternalResource @relation(fields: [externalResourceId], references: [id], onDelete: Cascade)
+
+  @@id([decisionId, externalResourceId])
+}
+
+model ProjectTag {
+  projectId String
+  tagId     String
+  project   Project @relation(fields: [projectId], references: [id], onDelete: Cascade)
+  tag       Tag     @relation(fields: [tagId], references: [id], onDelete: Cascade)
+
+  @@id([projectId, tagId])
+}
+
+model TaskTag {
+  taskId String
+  tagId  String
+  task   Task @relation(fields: [taskId], references: [id], onDelete: Cascade)
+  tag    Tag  @relation(fields: [tagId], references: [id], onDelete: Cascade)
+
+  @@id([taskId, tagId])
+}
+
+model KnowledgeItemTag {
+  knowledgeItemId String
+  tagId           String
+  knowledgeItem   KnowledgeItem @relation(fields: [knowledgeItemId], references: [id], onDelete: Cascade)
+  tag             Tag           @relation(fields: [tagId], references: [id], onDelete: Cascade)
+
+  @@id([knowledgeItemId, tagId])
+}

@@ -1,0 +1,11 @@
+.git
+.next
+node_modules
+*.log
+.DS_Store
+.env
+.env.local
+docs
+*.docx
+*.Identifier
+

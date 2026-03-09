@@ -1,0 +1,11 @@
+.next
+node_modules
+.claude
+.env
+.env.local
+.env.production
+coverage
+dist
+*.log
+*:Zone.Identifier
+.DS_Store

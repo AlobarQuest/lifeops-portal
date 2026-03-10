@@ -17,8 +17,8 @@ export function AppShell({ title, eyebrow, children }: AppShellProps) {
     <div className="shell">
       <aside className="sidebar">
         <div className="brand-block">
-          <p className="eyebrow">LifeOpsPortal</p>
-          <h1>One control room for execution, planning, and knowledge.</h1>
+          <p className="eyebrow">LifeOps // Portal</p>
+          <h1>Control grid for execution, context, and decisions.</h1>
         </div>
 
         <nav className="nav-list" aria-label="Primary">
@@ -45,7 +45,7 @@ export function AppShell({ title, eyebrow, children }: AppShellProps) {
             <p className="eyebrow">{eyebrow}</p>
             <h2>{title}</h2>
           </div>
-          <div className="topbar-chip">portal.devonwatkins.com</div>
+          <div className="topbar-chip">Node // portal.devonwatkins.com</div>
         </header>
         {children}
       </main>

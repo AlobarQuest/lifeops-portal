@@ -78,14 +78,23 @@ export async function verifyOwnerLogin(email: string, password: string): Promise
 
 export async function changeOwnerPassword(email: string, currentPassword: string, nextPassword: string) {
   const owner = await findOwnerUser(email);
+  const bootstrapPassword = getConfiguredPassword();
 
-  if (!owner || !owner.isOwner) {
+  if (!owner) {
+    if (email !== getOwnerEmail() || !bootstrapPassword || currentPassword !== bootstrapPassword) {
+      return { ok: false as const, reason: "invalid-current-password" };
+    }
+
+    await persistBootstrapPassword(email, nextPassword);
+
+    return { ok: true as const };
+  }
+
+  if (!owner.isOwner) {
     return { ok: false as const, reason: "not-found" };
   }
 
   if (!owner.passwordHash) {
-    const bootstrapPassword = getConfiguredPassword();
-
     if (!bootstrapPassword || currentPassword !== bootstrapPassword) {
       return { ok: false as const, reason: "invalid-current-password" };
     }

@@ -338,6 +338,11 @@ select {
   gap: 1rem;
 }
 
+.project-form {
+  display: grid;
+  gap: 1rem;
+}
+
 .task-form {
   display: grid;
   gap: 1rem;
@@ -456,6 +461,10 @@ select {
   line-height: 1.55;
 }
 
+.single-column-grid {
+  grid-template-columns: 1fr;
+}
+
 .task-row-main {
   min-width: 0;
   flex: 1;
@@ -476,6 +485,23 @@ select {
   border-radius: 999px;
   background: rgba(255, 255, 255, 0.78);
   color: var(--ink);
+  cursor: pointer;
+}
+
+.danger-form {
+  display: grid;
+  gap: 1rem;
+}
+
+.danger-button {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  padding: 0.9rem 1.1rem;
+  border: 1px solid transparent;
+  border-radius: 999px;
+  background: var(--ember);
+  color: #fff8f1;
   cursor: pointer;
 }
 

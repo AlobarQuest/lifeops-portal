@@ -2,7 +2,9 @@ import Link from "next/link";
 import { notFound, redirect } from "next/navigation";
 
 import { AppShell } from "@/components/app-shell";
+import { ProjectDeleteForm } from "@/components/project-delete-form";
 import { ProjectDocumentEditor } from "@/components/project-document-editor";
+import { ProjectMetadataForm } from "@/components/project-metadata-form";
 import { SectionCard } from "@/components/section-card";
 import { getCurrentUser } from "@/lib/current-user";
 import {
@@ -10,7 +12,12 @@ import {
   getProjectDocumentSlug,
   getProjectDocumentTypeFromSlug,
 } from "@/lib/project-documents";
-import { getProjectWorkspaceBySlug } from "@/lib/projects";
+import {
+  formatProjectPriorityLabel,
+  formatProjectStatusLabel,
+  getProjectWorkspaceBySlug,
+  listProjectRoles,
+} from "@/lib/projects";
 
 type ProjectDetailPageProps = {
   params: Promise<{
@@ -33,6 +40,18 @@ function formatDateLabel(date: Date | null) {
   });
 }
 
+function formatDateInputValue(date: Date | null) {
+  if (!date) {
+    return undefined;
+  }
+
+  const year = date.getUTCFullYear();
+  const month = `${date.getUTCMonth() + 1}`.padStart(2, "0");
+  const day = `${date.getUTCDate()}`.padStart(2, "0");
+
+  return `${year}-${month}-${day}`;
+}
+
 export default async function ProjectDetailPage({
   params,
   searchParams,
@@ -44,7 +63,10 @@ export default async function ProjectDetailPage({
   }
 
   const [{ slug }, query] = await Promise.all([params, searchParams]);
-  const project = await getProjectWorkspaceBySlug(slug, currentUser.id);
+  const [project, roleOptions] = await Promise.all([
+    getProjectWorkspaceBySlug(slug, currentUser.id),
+    listProjectRoles(),
+  ]);
 
   if (!project) {
     notFound();
@@ -74,8 +96,8 @@ export default async function ProjectDetailPage({
               <p>{project.description ?? "This project now keeps its planning artifacts directly inside LifeOps."}</p>
             </div>
             <div className="meta-row">
-              <span className="pill">{project.status.replaceAll("_", " ")}</span>
-              <span className="pill">{project.priority}</span>
+              <span className="pill">{formatProjectStatusLabel(project.status)}</span>
+              <span className="pill">{formatProjectPriorityLabel(project.priority)}</span>
               {project.primaryRole ? <span className="pill">{project.primaryRole.name}</span> : null}
             </div>
           </div>
@@ -169,25 +191,52 @@ export default async function ProjectDetailPage({
             </div>
           </SectionCard>
 
-          <SectionCard
-            title="Project context snapshot"
-            caption="Keep the current working shape visible while the document pack carries the deeper details."
-          >
-            <div className="detail-grid">
-              <article>
-                <strong>Target start</strong>
-                <p>{formatDateLabel(project.targetStartAt)}</p>
-              </article>
-              <article>
-                <strong>Target end</strong>
-                <p>{formatDateLabel(project.targetEndAt)}</p>
-              </article>
-              <article>
-                <strong>Workspace route</strong>
-                <p>/projects/{project.slug}</p>
-              </article>
-            </div>
-          </SectionCard>
+          <div className="subtle-grid">
+            <SectionCard
+              title="Project settings"
+              caption="Edit the project record here. The actual project documents remain editable in the workspace above."
+            >
+              <ProjectMetadataForm
+                description={project.description}
+                name={project.name}
+                primaryRoleId={project.primaryRole?.id}
+                priority={project.priority}
+                projectSlug={project.slug}
+                roleOptions={roleOptions}
+                status={project.status}
+                summary={project.summary}
+                targetEndOn={formatDateInputValue(project.targetEndAt)}
+                targetStartOn={formatDateInputValue(project.targetStartAt)}
+              />
+            </SectionCard>
+
+            <SectionCard
+              title="Project context snapshot"
+              caption="Keep the current working shape visible while the document pack carries the deeper details."
+            >
+              <div className="detail-grid single-column-grid">
+                <article>
+                  <strong>Target start</strong>
+                  <p>{formatDateLabel(project.targetStartAt)}</p>
+                </article>
+                <article>
+                  <strong>Target end</strong>
+                  <p>{formatDateLabel(project.targetEndAt)}</p>
+                </article>
+                <article>
+                  <strong>Workspace route</strong>
+                  <p>/projects/{project.slug}</p>
+                </article>
+              </div>
+            </SectionCard>
+
+            <SectionCard
+              title="Danger zone"
+              caption="Use this only when the project workspace should be removed altogether."
+            >
+              <ProjectDeleteForm projectName={project.name} projectSlug={project.slug} />
+            </SectionCard>
+          </div>
         </section>
       </div>
     </AppShell>

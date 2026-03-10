@@ -1,6 +1,8 @@
 import {
+  PriorityLevel,
   Prisma,
   ProjectDocumentType,
+  ProjectStatus,
   TaskStatus,
 } from "@prisma/client";
 
@@ -103,6 +105,86 @@ export type ProjectListItem = Prisma.ProjectGetPayload<{
 export type ProjectWorkspace = Prisma.ProjectGetPayload<{
   select: typeof projectWorkspaceSelect;
 }>;
+
+export type ProjectRoleOption = {
+  id: string;
+  slug: string;
+  name: string;
+};
+
+export function formatProjectStatusLabel(status: ProjectStatus) {
+  switch (status) {
+    case ProjectStatus.ON_HOLD:
+      return "On hold";
+    default:
+      return status
+        .toLowerCase()
+        .split("_")
+        .map((segment) => `${segment.slice(0, 1).toUpperCase()}${segment.slice(1)}`)
+        .join(" ");
+  }
+}
+
+export function formatProjectPriorityLabel(priority: PriorityLevel) {
+  return priority
+    .toLowerCase()
+    .split("_")
+    .map((segment) => `${segment.slice(0, 1).toUpperCase()}${segment.slice(1)}`)
+    .join(" ");
+}
+
+export async function listProjectRoles(): Promise<ProjectRoleOption[]> {
+  return prisma.role.findMany({
+    where: {
+      isActive: true,
+    },
+    select: {
+      id: true,
+      slug: true,
+      name: true,
+    },
+    orderBy: [
+      {
+        sortOrder: "asc",
+      },
+      {
+        name: "asc",
+      },
+    ],
+  });
+}
+
+export function slugifyProjectName(name: string) {
+  return name
+    .toLowerCase()
+    .trim()
+    .replace(/[^a-z0-9]+/g, "-")
+    .replace(/^-+|-+$/g, "")
+    .slice(0, 60);
+}
+
+async function createUniqueProjectSlug(name: string) {
+  const baseSlug = slugifyProjectName(name) || "project";
+  let candidate = baseSlug;
+  let suffix = 2;
+
+  // Keep slug generation deterministic and collision-safe for the small v1 workload.
+  while (
+    await prisma.project.findUnique({
+      where: {
+        slug: candidate,
+      },
+      select: {
+        id: true,
+      },
+    })
+  ) {
+    candidate = `${baseSlug}-${suffix}`;
+    suffix += 1;
+  }
+
+  return candidate;
+}
 
 export async function ensureProjectDocumentSet(project: ProjectSeedContext) {
   await Promise.all(
@@ -217,5 +299,177 @@ export async function updateProjectDocumentRecord({
     data: {
       bodyMarkdown,
     },
+  });
+}
+
+export async function createProjectRecord({
+  ownerId,
+  name,
+  summary,
+  description,
+  status,
+  priority,
+  primaryRoleId,
+  targetStartAt,
+  targetEndAt,
+}: {
+  ownerId: string;
+  name: string;
+  summary: string;
+  description?: string;
+  status: ProjectStatus;
+  priority: PriorityLevel;
+  primaryRoleId?: string;
+  targetStartAt?: Date;
+  targetEndAt?: Date;
+}) {
+  const slug = await createUniqueProjectSlug(name);
+
+  const project = await prisma.project.create({
+    data: {
+      ownerId,
+      slug,
+      name,
+      summary,
+      description,
+      status,
+      priority,
+      primaryRoleId,
+      targetStartAt,
+      targetEndAt,
+      isActive: status !== ProjectStatus.ARCHIVED,
+    },
+    select: {
+      id: true,
+      slug: true,
+      name: true,
+      summary: true,
+      description: true,
+    },
+  });
+
+  await ensureProjectDocumentSet(project);
+
+  return project;
+}
+
+export async function updateProjectRecord({
+  projectId,
+  ownerId,
+  name,
+  summary,
+  description,
+  status,
+  priority,
+  primaryRoleId,
+  targetStartAt,
+  targetEndAt,
+}: {
+  projectId: string;
+  ownerId: string;
+  name: string;
+  summary: string;
+  description?: string;
+  status: ProjectStatus;
+  priority: PriorityLevel;
+  primaryRoleId?: string;
+  targetStartAt?: Date;
+  targetEndAt?: Date;
+}) {
+  const existingProject = await prisma.project.findFirst({
+    where: {
+      id: projectId,
+      ownerId,
+    },
+    select: {
+      id: true,
+      slug: true,
+    },
+  });
+
+  if (!existingProject) {
+    return null;
+  }
+
+  return prisma.project.update({
+    where: {
+      id: projectId,
+    },
+    data: {
+      name,
+      summary,
+      description,
+      status,
+      priority,
+      primaryRoleId,
+      targetStartAt,
+      targetEndAt,
+      isActive: status !== ProjectStatus.ARCHIVED,
+      lastReviewedAt: new Date(),
+    },
+    select: {
+      slug: true,
+    },
+  });
+}
+
+export async function deleteProjectRecord({
+  projectId,
+  ownerId,
+}: {
+  projectId: string;
+  ownerId: string;
+}) {
+  return prisma.$transaction(async (tx) => {
+    const existingProject = await tx.project.findFirst({
+      where: {
+        id: projectId,
+        ownerId,
+      },
+      select: {
+        id: true,
+      },
+    });
+
+    if (!existingProject) {
+      return null;
+    }
+
+    await tx.task.updateMany({
+      where: {
+        projectId,
+        ownerId,
+      },
+      data: {
+        projectId: null,
+      },
+    });
+
+    await tx.decision.updateMany({
+      where: {
+        projectId,
+        ownerId,
+      },
+      data: {
+        projectId: null,
+      },
+    });
+
+    await tx.idea.updateMany({
+      where: {
+        convertedProjectId: projectId,
+      },
+      data: {
+        convertedProjectId: null,
+      },
+    });
+
+    await tx.project.delete({
+      where: {
+        id: projectId,
+      },
+    });
+
+    return existingProject;
   });
 }

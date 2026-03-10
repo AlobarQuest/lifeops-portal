@@ -3,6 +3,7 @@ name: Publish Container Image
 on:
   push:
     branches:
+      - ghcr-cutover
       - main
   workflow_dispatch:
 

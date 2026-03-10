@@ -1,6 +1,17 @@
+import { PrismaPg } from "@prisma/adapter-pg";
 import { PrismaClient } from "@prisma/client";
 
-const prisma = new PrismaClient();
+import { hashPassword } from "../lib/password";
+
+const connectionString = process.env.DATABASE_URL;
+
+if (!connectionString) {
+  throw new Error("DATABASE_URL is required to seed the database");
+}
+
+const prisma = new PrismaClient({
+  adapter: new PrismaPg({ connectionString }),
+});
 
 const roles = [
   { slug: "developer", name: "Developer", description: "Software delivery, repos, systems, and technical work.", sortOrder: 1 },
@@ -13,17 +24,28 @@ const roles = [
 
 async function main() {
   const ownerEmail = process.env.OWNER_EMAIL ?? process.env.AUTH_EMAIL ?? "devon.watkins@gmail.com";
+  const ownerPassword = process.env.AUTH_PASSWORD;
+  const passwordHash = ownerPassword ? hashPassword(ownerPassword) : undefined;
+  const passwordUpdatedAt = passwordHash ? new Date() : undefined;
 
   await prisma.user.upsert({
     where: { email: ownerEmail },
     update: {
       displayName: "Devon Watkins",
       isOwner: true,
+      ...(passwordHash
+        ? {
+            passwordHash,
+            passwordUpdatedAt,
+          }
+        : {}),
     },
     create: {
       email: ownerEmail,
       displayName: "Devon Watkins",
       isOwner: true,
+      passwordHash,
+      passwordUpdatedAt,
     },
   });
 

@@ -333,6 +333,11 @@ select {
   margin-top: 2rem;
 }
 
+.password-form {
+  display: grid;
+  gap: 1rem;
+}
+
 .field {
   display: grid;
   gap: 0.45rem;
@@ -357,6 +362,13 @@ select {
   border-radius: 16px;
   background: rgba(147, 59, 45, 0.12);
   color: var(--ember);
+}
+
+.success-banner {
+  padding: 0.85rem 1rem;
+  border-radius: 16px;
+  background: rgba(47, 122, 105, 0.14);
+  color: var(--mint);
 }
 
 .subtle-grid {
@@ -391,4 +403,3 @@ select {
     flex-direction: column;
   }
 }
-

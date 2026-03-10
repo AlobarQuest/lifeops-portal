@@ -6,10 +6,9 @@ import { redirect } from "next/navigation";
 import {
   createSessionToken,
   getConfiguredEmail,
-  getConfiguredPassword,
   isAuthConfigured,
-  SESSION_COOKIE,
 } from "@/lib/auth";
+import { SESSION_COOKIE } from "@/lib/auth";
 
 export async function loginAction(formData: FormData) {
   if (!isAuthConfigured()) {
@@ -20,8 +19,16 @@ export async function loginAction(formData: FormData) {
   const password = String(formData.get("password") ?? "");
   const redirectTo = String(formData.get("redirectTo") ?? "/");
 
-  if (email !== getConfiguredEmail() || password !== getConfiguredPassword()) {
+  if (email !== getConfiguredEmail()) {
     redirect(`/login?error=invalid&redirectTo=${encodeURIComponent(redirectTo)}`);
+  }
+
+  const { verifyOwnerLogin } = await import("@/lib/owner-auth");
+  const loginResult = await verifyOwnerLogin(email, password);
+
+  if (!loginResult.ok) {
+    const error = loginResult.reason === "missing-bootstrap-password" ? "missing-bootstrap-password" : "invalid";
+    redirect(`/login?error=${error}&redirectTo=${encodeURIComponent(redirectTo)}`);
   }
 
   const token = await createSessionToken(email);
@@ -37,10 +44,3 @@ export async function loginAction(formData: FormData) {
 
   redirect(redirectTo.startsWith("/") ? redirectTo : "/");
 }
-
-export async function logoutAction() {
-  const cookieStore = await cookies();
-  cookieStore.delete(SESSION_COOKIE);
-  redirect("/login");
-}
-

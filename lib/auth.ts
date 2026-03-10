@@ -48,7 +48,7 @@ async function getSigningKey() {
 }
 
 export function isAuthConfigured() {
-  return Boolean(process.env.AUTH_EMAIL && process.env.AUTH_PASSWORD && process.env.SESSION_SECRET);
+  return Boolean(process.env.AUTH_EMAIL && process.env.SESSION_SECRET);
 }
 
 export function getConfiguredEmail() {

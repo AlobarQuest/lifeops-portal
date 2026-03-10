@@ -10,7 +10,9 @@ type LoginPageProps = {
 
 const errorMessages: Record<string, string> = {
   invalid: "The email or password did not match the configured owner account.",
-  "missing-config": "Set AUTH_EMAIL, AUTH_PASSWORD, and SESSION_SECRET before signing in.",
+  "missing-config": "Set AUTH_EMAIL and SESSION_SECRET before signing in.",
+  "missing-bootstrap-password":
+    "The database does not have an owner password yet. Set AUTH_PASSWORD temporarily so the first owner login can bootstrap it.",
 };
 
 export default async function LoginPage({ searchParams }: LoginPageProps) {
@@ -52,4 +54,3 @@ export default async function LoginPage({ searchParams }: LoginPageProps) {
     </div>
   );
 }
-

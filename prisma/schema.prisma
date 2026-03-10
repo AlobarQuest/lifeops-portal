@@ -81,6 +81,8 @@ model User {
   displayName       String
   timezone          String             @default("America/New_York")
   isOwner           Boolean            @default(false)
+  passwordHash      String?
+  passwordUpdatedAt DateTime?
   createdAt         DateTime           @default(now())
   updatedAt         DateTime           @updatedAt
   projects          Project[]

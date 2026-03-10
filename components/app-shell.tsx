@@ -1,7 +1,7 @@
 import Link from "next/link";
 import type { ReactNode } from "react";
 
-import { logoutAction } from "@/app/actions/auth";
+import { logoutAction } from "@/app/actions/logout";
 import { navItems } from "@/lib/site-data";
 
 import { NavLink } from "./nav-link";
@@ -52,4 +52,3 @@ export function AppShell({ title, eyebrow, children }: AppShellProps) {
     </div>
   );
 }
-

@@ -1,15 +1,16 @@
 # Coolify Deployment Plan
 
-Verified against Coolify official docs on 2026-03-09.
+Verified against Coolify official docs on 2026-03-10.
 
 ## Deployment Recommendation
 
-Use a Coolify `Application` connected directly to the GitHub repository, with the `Dockerfile` build pack, and provision PostgreSQL as a separate Coolify database resource.
+Use a Coolify Docker Image application that pulls a prebuilt GHCR image, and provision PostgreSQL as a separate Coolify database resource.
 
 This is the right starting point because:
 
-- Coolify applications are designed for Git-based CI/CD.
-- The Dockerfile build pack gives full control over the production image.
+- The production image is still defined by the root `Dockerfile`.
+- Building on GitHub or another external builder avoids CPU spikes on the Coolify host.
+- Coolify only needs to pull and run the image, which is materially safer on a small server.
 - The MVP only needs one app container to start.
 - Running the database separately gives cleaner backups, upgrades, and recovery.
 
@@ -23,32 +24,33 @@ If the app later needs a worker, scheduler, or background sync service, reevalua
 
 ## Target Topology
 
-- `lifeops-web`: Coolify Application built from GitHub with root `Dockerfile`
+- `lifeops-web`: Coolify Docker Image application pulling `ghcr.io/alobarquest/lifeops-portal`
 - `lifeops-db`: Coolify PostgreSQL resource
 - optional later: `lifeops-worker` for background jobs
 
 ## GitHub Setup
 
-For a private repository, prefer the Coolify GitHub App integration.
+Use GitHub as the image builder and GHCR as the registry.
 
 Initial setup:
 
-1. Create the GitHub repository.
-2. In Coolify, create or connect a GitHub App source.
-3. Grant that GitHub App access to the repository.
-4. Create a new Coolify `Application`.
-5. Select the repository and branch.
-6. Select the `Dockerfile` build pack.
-7. Set base directory to `/`.
+1. Push the repository to GitHub.
+2. Enable the workflow at `.github/workflows/publish-image.yml`.
+3. Publish `ghcr.io/alobarquest/lifeops-portal` tags from `main`.
+4. In Coolify, create a Docker Image application.
+5. Point it at `ghcr.io/alobarquest/lifeops-portal`.
+6. Use a stable tag like `latest`, or a specific commit SHA tag for controlled rollouts.
+7. Set registry credentials if the GHCR package remains private.
 
-For a public repository, Coolify can deploy directly from the repository URL.
+This repo can still remain private even if Coolify no longer builds directly from GitHub.
 
 ## Application Configuration
 
-- Build pack: `Dockerfile`
-- Base directory: `/`
+- Image source: `ghcr.io/alobarquest/lifeops-portal`
+- Image tag: `latest` or commit SHA
 - Exposed port: `3000`
 - Health endpoint: `/api/health`
+- Health check host: `127.0.0.1`
 - Branch strategy: `main` for production; add `develop` only if a staging environment becomes necessary
 
 Make sure the app listens on `0.0.0.0`, not `localhost`.
@@ -74,8 +76,9 @@ Useful Coolify-provided variables:
 
 Notes:
 
-- Mark anything needed at image build time as a Coolify build variable.
+- Do not mark application secrets as image build variables.
 - Keep secrets in Coolify, not in the repository.
+- The only system still building the image should be GitHub Actions or another external builder.
 
 ## Database Plan
 
@@ -105,29 +108,27 @@ Local stack:
 Before the first production deployment:
 
 1. The repo is on GitHub.
-2. The app builds successfully from the root `Dockerfile`.
+2. The image publishes successfully to GHCR.
 3. The app starts with `HOST=0.0.0.0`.
 4. `DATABASE_URL` points to the Coolify PostgreSQL instance.
 5. A health endpoint returns `200`.
 6. Secrets are stored in Coolify.
 7. Database backups are enabled.
-8. The main branch deploys automatically after push.
+8. Coolify pulls the latest image without building on the host.
 
-## Why Dockerfile Over Docker Compose For Day One
+## Why GHCR Image Over Host Builds
 
-Coolify supports both, but the simpler option is better here.
+Coolify supports Git source builds, but the safer option here is a pulled image.
 
-- Dockerfile is enough for one web app.
-- It keeps GitHub-to-deploy setup straightforward.
-- It avoids coupling the app lifecycle to the database lifecycle.
-- It keeps the initial repo shape simple.
+- The root Dockerfile still defines the image.
+- The Coolify host no longer spends CPU on `npm ci` and `next build`.
+- It avoids rollout hangs caused by on-host builds.
+- It keeps the app lifecycle separate from the database lifecycle.
 
 Use Docker Compose later only if the product genuinely needs multiple first-party containers.
 
 ## Reference Docs
 
-- Coolify CI/CD with Git providers: https://coolify.io/docs/applications/ci-cd/introduction
-- Coolify GitHub integration: https://coolify.io/docs/knowledge-base/git/github/integration
-- Coolify Dockerfile build pack: https://coolify.io/docs/applications/build-packs/dockerfile
+- Coolify Docker Image application: https://coolify.io/docs/applications/docker-image
 - Coolify Docker Compose build pack: https://coolify.io/docs/applications/build-packs/docker-compose
 - Coolify environment variables: https://coolify.io/docs/knowledge-base/environment-variables

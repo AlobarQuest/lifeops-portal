@@ -33,8 +33,9 @@ This repository now contains the initial application scaffold for `LifeOpsPortal
 ## Deployment Shape
 
 - Coolify `Application`
-- GitHub-backed deployment from `AlobarQuest/lifeops-portal`
-- Root `Dockerfile`
+- GitHub-backed build pipeline from `AlobarQuest/lifeops-portal`
+- GHCR image publish workflow at `.github/workflows/publish-image.yml`
+- Coolify should pull `ghcr.io/alobarquest/lifeops-portal` instead of building from source on the server
 - Separate Coolify PostgreSQL resource
 - Production domain: `portal.devonwatkins.com`
 

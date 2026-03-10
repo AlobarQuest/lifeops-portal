@@ -381,6 +381,81 @@ select {
   gap: 1rem;
 }
 
+.project-list-item {
+  display: flex;
+  align-items: flex-start;
+  justify-content: space-between;
+  gap: 1rem;
+}
+
+.project-list-stats {
+  display: flex;
+  flex-wrap: wrap;
+  justify-content: flex-end;
+  gap: 0.5rem;
+}
+
+.project-workspace-layout {
+  display: grid;
+  grid-template-columns: minmax(280px, 0.8fr) minmax(0, 1.4fr);
+  gap: 1rem;
+}
+
+.document-nav {
+  display: grid;
+  gap: 0.75rem;
+  margin-top: 1rem;
+}
+
+.document-nav-item {
+  display: grid;
+  gap: 0.25rem;
+  padding: 1rem 1.1rem;
+  border: 1px solid var(--line);
+  border-radius: var(--radius-sm);
+  background: rgba(255, 255, 255, 0.58);
+  transition: transform 160ms ease, border-color 160ms ease, background 160ms ease;
+}
+
+.document-nav-item:hover,
+.document-nav-item.active {
+  border-color: rgba(170, 76, 39, 0.24);
+  background: rgba(170, 76, 39, 0.08);
+  transform: translateX(2px);
+}
+
+.document-editor-header {
+  display: flex;
+  align-items: flex-start;
+  justify-content: space-between;
+  gap: 1rem;
+}
+
+.document-editor-header h3 {
+  margin: 0;
+  font-family: var(--serif);
+  font-size: 1.8rem;
+  line-height: 1;
+}
+
+.document-editor-meta {
+  display: flex;
+  flex-wrap: wrap;
+  justify-content: flex-end;
+  gap: 0.5rem;
+}
+
+.project-document-form {
+  display: grid;
+  gap: 1rem;
+}
+
+.document-textarea {
+  min-height: 560px;
+  font-family: "SFMono-Regular", Consolas, "Liberation Mono", Menlo, monospace;
+  line-height: 1.55;
+}
+
 .task-row-main {
   min-width: 0;
   flex: 1;
@@ -429,7 +504,8 @@ select {
   .two-column,
   .detail-grid,
   .metrics-grid,
-  .form-grid {
+  .form-grid,
+  .project-workspace-layout {
     grid-template-columns: 1fr;
   }
 
@@ -449,7 +525,9 @@ select {
   .topbar,
   .page-header,
   .section-heading,
-  .task-row {
+  .task-row,
+  .project-list-item,
+  .document-editor-header {
     flex-direction: column;
   }
 }

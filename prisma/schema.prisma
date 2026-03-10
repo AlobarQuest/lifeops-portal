@@ -75,6 +75,21 @@ enum ResourceType {
   LINK
 }
 
+enum ProjectDocumentType {
+  PROJECT_CHARTER
+  PRODUCT_BRIEF
+  SCOPE_BACKLOG
+  REQUIREMENTS_USER_STORIES
+  ARCHITECTURE_OVERVIEW
+  DATA_MODEL
+  DECISION_LOG
+  TASK_BOARD
+  TEST_CHECKLIST
+  DEPLOYMENT_NOTES
+  AI_COLLABORATION_RULES
+  PROJECT_CONTEXT_PACK
+}
+
 model User {
   id                String             @id @default(cuid())
   email             String             @unique
@@ -125,6 +140,7 @@ model Project {
   primaryRole     Role?                    @relation(fields: [primaryRoleId], references: [id])
   owner           User                     @relation(fields: [ownerId], references: [id])
   tasks           Task[]
+  documents       ProjectDocument[]
   decisions       Decision[]
   knowledgeLinks  ProjectKnowledgeItem[]
   resourceLinks   ProjectExternalResource[]
@@ -134,6 +150,19 @@ model Project {
   @@index([status])
   @@index([primaryRoleId])
   @@index([updatedAt])
+}
+
+model ProjectDocument {
+  id           String              @id @default(cuid())
+  projectId    String
+  type         ProjectDocumentType
+  bodyMarkdown String
+  createdAt    DateTime            @default(now())
+  updatedAt    DateTime            @updatedAt
+  project      Project             @relation(fields: [projectId], references: [id], onDelete: Cascade)
+
+  @@unique([projectId, type])
+  @@index([projectId, updatedAt])
 }
 
 model Task {

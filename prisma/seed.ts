@@ -6,6 +6,10 @@ import {
   TaskStatus,
 } from "@prisma/client";
 
+import {
+  buildProjectDocumentTemplate,
+  projectDocumentDefinitions,
+} from "../lib/project-documents";
 import { hashPassword } from "../lib/password";
 
 const connectionString = process.env.DATABASE_URL;
@@ -62,33 +66,109 @@ async function main() {
     });
   }
 
-  const developerRole = await prisma.role.findUnique({
-    where: { slug: "developer" },
+  const roleRecords = await prisma.role.findMany({
+    where: {
+      slug: {
+        in: ["developer", "realtor", "adjuster"],
+      },
+    },
   });
+  const rolesBySlug = new Map(roleRecords.map((role) => [role.slug, role]));
 
-  if (!developerRole) {
+  if (!rolesBySlug.get("developer")) {
     return;
   }
 
-  const lifeOpsProject = await prisma.project.upsert({
-    where: { slug: "lifeops-portal" },
-    update: {},
-    create: {
+  const projectSeeds = [
+    {
       slug: "lifeops-portal",
       name: "LifeOps Portal MVP",
       summary: "Build the internal control room that replaces fragmented planning and execution tools.",
       description: "First-party dashboard, task system, and knowledge base for Devon-owned operations.",
       status: ProjectStatus.ACTIVE,
-      ownerId: owner.id,
-      primaryRoleId: developerRole.id,
       priority: PriorityLevel.CRITICAL,
-      isActive: true,
+      primaryRoleSlug: "developer",
     },
-  });
+    {
+      slug: "realtor-operations-refresh",
+      name: "Realtor Operations Refresh",
+      summary: "Restructure listing, contact, and follow-up workflows into reusable playbooks.",
+      description: "Turn the current realtor operating model into repeatable systems, docs, and checkpoints.",
+      status: ProjectStatus.PLANNED,
+      priority: PriorityLevel.HIGH,
+      primaryRoleSlug: "realtor",
+    },
+    {
+      slug: "adjuster-playbook",
+      name: "Adjuster Playbook",
+      summary: "Convert field knowledge and claim response patterns into SOP-driven execution.",
+      description: "Capture the working adjuster playbook and move it into durable, structured execution documents.",
+      status: ProjectStatus.BLOCKED,
+      priority: PriorityLevel.HIGH,
+      primaryRoleSlug: "adjuster",
+    },
+  ] as const;
+
+  const seededProjects = [];
+
+  for (const projectSeed of projectSeeds) {
+    const primaryRole = rolesBySlug.get(projectSeed.primaryRoleSlug);
+
+    const project = await prisma.project.upsert({
+      where: { slug: projectSeed.slug },
+      update: {
+        name: projectSeed.name,
+        summary: projectSeed.summary,
+        description: projectSeed.description,
+        status: projectSeed.status,
+        ownerId: owner.id,
+        primaryRoleId: primaryRole?.id,
+        priority: projectSeed.priority,
+        isActive: true,
+      },
+      create: {
+        slug: projectSeed.slug,
+        name: projectSeed.name,
+        summary: projectSeed.summary,
+        description: projectSeed.description,
+        status: projectSeed.status,
+        ownerId: owner.id,
+        primaryRoleId: primaryRole?.id,
+        priority: projectSeed.priority,
+        isActive: true,
+      },
+    });
+
+    seededProjects.push(project);
+
+    for (const definition of projectDocumentDefinitions) {
+      await prisma.projectDocument.upsert({
+        where: {
+          projectId_type: {
+            projectId: project.id,
+            type: definition.type,
+          },
+        },
+        update: {},
+        create: {
+          projectId: project.id,
+          type: definition.type,
+          bodyMarkdown: buildProjectDocumentTemplate(project, definition.type),
+        },
+      });
+    }
+  }
+
+  const lifeOpsProject = seededProjects.find((project) => project.slug === "lifeops-portal");
+  const realtorProject = seededProjects.find((project) => project.slug === "realtor-operations-refresh");
+  const adjusterProject = seededProjects.find((project) => project.slug === "adjuster-playbook");
+  const developerRole = rolesBySlug.get("developer");
+  const realtorRole = rolesBySlug.get("realtor");
+  const adjusterRole = rolesBySlug.get("adjuster");
 
   const taskCount = await prisma.task.count();
 
-  if (taskCount === 0) {
+  if (taskCount === 0 && lifeOpsProject && developerRole) {
     await prisma.task.createMany({
       data: [
         {
@@ -118,6 +198,33 @@ async function main() {
           status: TaskStatus.INBOX,
           priority: PriorityLevel.MEDIUM,
         },
+        ...(realtorProject && realtorRole
+          ? [
+              {
+                ownerId: owner.id,
+                projectId: realtorProject.id,
+                roleId: realtorRole.id,
+                title: "Document the current listing-to-close workflow",
+                description: "Capture the real-world process and move it into the new project document pack.",
+                status: TaskStatus.TODO,
+                priority: PriorityLevel.HIGH,
+              },
+            ]
+          : []),
+        ...(adjusterProject && adjusterRole
+          ? [
+              {
+                ownerId: owner.id,
+                projectId: adjusterProject.id,
+                roleId: adjusterRole.id,
+                title: "Inventory field notes for the adjuster playbook",
+                description: "Pull scattered notes into one documented operating flow inside the project workspace.",
+                status: TaskStatus.BLOCKED,
+                priority: PriorityLevel.HIGH,
+                blockedReason: "Source notes still live across multiple tools.",
+              },
+            ]
+          : []),
       ],
     });
   }

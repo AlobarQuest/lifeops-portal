@@ -9,6 +9,13 @@ This repository now contains the initial application scaffold for `LifeOpsPortal
 - Docker-first deployment for Coolify
 - Single-owner credential login for the initial release
 
+## Current Task System State
+
+- `/tasks` is now backed by PostgreSQL instead of placeholder site data
+- `/api/tasks` is the first protected task API route for browser and internal-app access
+- external applications are intended to use LifeOps Portal as the shared task layer instead of Todoist
+- machine-to-machine task access uses `INTERNAL_API_TOKEN`, but the broader external-app contract still needs idempotency, source attribution, and helper routes
+
 ## Project Layout
 
 - `app/` application routes
@@ -32,10 +39,9 @@ This repository now contains the initial application scaffold for `LifeOpsPortal
 
 ## Deployment Shape
 
-- Coolify `Application`
-- GitHub-backed build pipeline from `AlobarQuest/lifeops-portal`
-- GHCR image publish workflow at `.github/workflows/publish-image.yml`
-- Coolify should pull `ghcr.io/alobarquest/lifeops-portal` instead of building from source on the server
+- GitHub Actions publishes the root `Dockerfile` to GHCR through `.github/workflows/publish-image.yml`
+- Coolify runs a Docker Image application that pulls `ghcr.io/alobarquest/lifeops-portal`
+- Do not switch production back to source builds on the current Coolify host unless server capacity changes
 - Separate Coolify PostgreSQL resource
 - Production domain: `portal.devonwatkins.com`
 
@@ -53,3 +59,13 @@ This repository now contains the initial application scaffold for `LifeOpsPortal
 - `docs/screen-inventory.md`
 - `docs/coolify-deployment-plan.md`
 - `docs/task-system-update-plan.md`
+- `docs/task-api-external-access-plan.md`
+
+## Handoff Focus
+
+If work resumes later to make tasks accessible to other applications, start with:
+
+1. `docs/task-api-external-access-plan.md`
+2. `docs/task-system-update-plan.md`
+3. `docs/schema-draft.md`
+4. `docs/coolify-deployment-plan.md`

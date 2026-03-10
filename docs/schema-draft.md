@@ -2,6 +2,11 @@
 
 This is the first-pass schema to turn the product documents into an implementation-ready database plan. It is intentionally biased toward a simple version 1 release.
 
+Current reality note:
+
+- the live schema already supports the first database-backed task flows
+- the task-related structures in this draft are the target for the next external-app accessibility phase
+
 ## Core Principles
 
 - Keep knowledge first-class.

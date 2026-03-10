@@ -27,6 +27,11 @@ MVP contents:
 - filters for role, project, due date, priority, blocked
 - create task action
 - task detail/edit panel or dedicated page
+- API-aligned quick capture so the UI and external callers use the same task model
+
+Current implementation note:
+- `/tasks` is now database-backed and includes the first quick-add flow
+- the next step is richer edit/detail behavior plus project/section organization
 
 ### `/projects`
 
@@ -104,7 +109,30 @@ Low-volume configuration for the MVP.
 MVP contents:
 - role management
 - statuses and tag management
-- future template/config placeholders
+- owner password rotation
+- future API token rotation and integration settings
+
+## Non-UI Route Inventory
+
+### `/api/tasks`
+
+Purpose:
+Protected task API surface for browser calls and internal application access.
+
+Current contents:
+- `GET` task listing
+- `POST` task creation
+- `PATCH` task update and complete/reopen behavior
+
+Current auth paths:
+- owner browser session
+- `Authorization: Bearer <INTERNAL_API_TOKEN>`
+- `x-lifeops-token: <INTERNAL_API_TOKEN>`
+
+Next additions:
+- idempotent create/update support
+- external source keys
+- project and section helper routes
 
 ## Widget Inventory For Home
 

@@ -55,13 +55,25 @@ This repo can still remain private even if Coolify no longer builds directly fro
 
 Make sure the app listens on `0.0.0.0`, not `localhost`.
 
+## Operational Notes From Production
+
+- Do not use Coolify source builds on the current server for this app. Host-side `npm ci` and `next build` caused repeated CPU spikes and stalled deploys.
+- Keep the app as a Docker Image deployment that pulls from GHCR.
+- Keep health checks enabled.
+- Use `127.0.0.1` as the health check host, not `localhost`, because `localhost` produced false negatives during rollout on this image.
+- The image must expose either `curl` or `wget` for Coolify health checks. The current `node:alpine` image path works with `wget`.
+
 ## Environment Variables
 
 Application variables:
 
 - `DATABASE_URL`
 - `APP_URL`
-- `AUTH_SECRET`
+- `AUTH_EMAIL`
+- `AUTH_PASSWORD`
+- `SESSION_SECRET`
+- `OWNER_EMAIL`
+- `INTERNAL_API_TOKEN`
 - `NODE_ENV=production`
 - `LOG_LEVEL=info`
 
@@ -79,6 +91,8 @@ Notes:
 - Do not mark application secrets as image build variables.
 - Keep secrets in Coolify, not in the repository.
 - The only system still building the image should be GitHub Actions or another external builder.
+- `INTERNAL_API_TOKEN` is required before other internal applications can call the task API as machine clients.
+- If GHCR remains private, Coolify must have working registry credentials before rollout. Public repository visibility alone does not make the container package public.
 
 ## Database Plan
 

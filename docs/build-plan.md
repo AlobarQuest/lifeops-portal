@@ -16,7 +16,7 @@ Start with one full-stack web application, not a distributed system. The MVP is 
 
 ### 2. Deployment Shape
 
-Deploy the app to Coolify as an `Application` connected to a GitHub repository, using a root `Dockerfile`. Run PostgreSQL as a separate Coolify database resource. Do not bundle the database into the same application container.
+Deploy the app to Coolify as a Docker Image application that pulls a GHCR image built from the root `Dockerfile` by GitHub Actions. Run PostgreSQL as a separate Coolify database resource. Do not bundle the database into the same application container.
 
 ### 3. Version 1 Technical Baseline
 
@@ -58,6 +58,7 @@ Avoid a monorepo until there is a real second deployable service.
 - Initialize git in this folder and create the GitHub repository.
 - Scaffold the root app.
 - Add `Dockerfile`, `.dockerignore`, and local Docker Compose for development.
+- Add the GHCR publish workflow.
 - Create the Coolify project, environment, and PostgreSQL instance.
 - Define shared environment variables and secrets.
 - Add a basic health endpoint for Coolify checks.
@@ -65,7 +66,8 @@ Avoid a monorepo until there is a real second deployable service.
 Exit criteria:
 - App runs locally in Docker.
 - App builds from the root `Dockerfile`.
-- Coolify can deploy the default branch from GitHub.
+- GitHub Actions can publish the production image to GHCR.
+- Coolify can pull and run the published image.
 
 ### Phase 1: Data Model And App Shell
 
@@ -93,7 +95,19 @@ Exit criteria:
 - Another internal application can create a task without writing directly to the database.
 - Project dashboards show status, next actions, links, and knowledge.
 
-### Phase 3: Intake, Resources, And Search
+### Phase 3: External Task Accessibility
+
+- Add `INTERNAL_API_TOKEN` based access for internal machine clients.
+- Add source attribution fields and idempotent task create/update flows.
+- Add project and section task APIs needed by external callers.
+- Add integration tests for bearer-token access and duplicate-prevention behavior.
+
+Exit criteria:
+- Another internal application can create and update tasks through the LifeOps API with stable auth.
+- Retries do not create duplicate tasks.
+- Task ownership and source attribution remain visible in the database.
+
+### Phase 4: Intake, Resources, And Search
 
 - Build ideas/inbox capture flow.
 - Implement idea-to-project conversion.
@@ -104,7 +118,7 @@ Exit criteria:
 Exit criteria:
 - Devon can capture, refine, search, and connect work records without leaving the app.
 
-### Phase 4: Reviews And Hardening
+### Phase 5: Reviews And Hardening
 
 - Build weekly review screens and stale project detection.
 - Tighten validations and empty-state UX.
@@ -124,8 +138,9 @@ Exit criteria:
 6. Build knowledge CRUD.
 7. Build home dashboard.
 8. Build quick capture and ideas queue.
-9. Build search and resources registry.
-10. Build reviews and stale project surfacing.
+9. Harden the task API for other internal apps.
+10. Build search and resources registry.
+11. Build reviews and stale project surfacing.
 
 ## Open Decisions That Should Be Resolved Early
 

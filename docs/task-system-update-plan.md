@@ -12,14 +12,26 @@ This update treats Todoist as:
 
 ## Current State
 
-Today, the `/tasks` section is a static placeholder:
+The original state was a static placeholder:
 
-- task rows come from `lib/site-data.ts`
-- filters are visual only
-- there is no create, edit, complete, reorder, or API workflow
-- other applications cannot create or update tasks through LifeOps Portal
+- task rows came from `lib/site-data.ts`
+- filters were visual only
+- there was no create, edit, complete, reorder, or API workflow
 
-That is acceptable for MVP scaffolding, but it is not sufficient if tasks are meant to become a shared execution layer across the wider system.
+Current implementation state on 2026-03-10:
+
+- `/tasks` is now backed by PostgreSQL
+- the owner can create tasks and complete or reopen them
+- `/api/tasks` now supports the first `GET`, `POST`, and `PATCH` flows
+- browser auth works through the normal owner session
+- machine-to-machine access is designed but still needs `INTERNAL_API_TOKEN` configured in production
+
+What is still missing before broad app-to-app use:
+
+- idempotent create/update behavior
+- source attribution fields
+- project and section helper APIs
+- a richer task model with sections, parent tasks, labels, and recurrence
 
 ## Todoist Benchmark Findings
 
@@ -141,7 +153,7 @@ Other applications should be able to:
 
 ### Recommended Version 1 API Surface
 
-These routes are enough to make the task section useful as shared infrastructure:
+Target routes for the shared task platform:
 
 - `POST /api/tasks`
 - `GET /api/tasks`
@@ -154,6 +166,17 @@ These routes are enough to make the task section useful as shared infrastructure
 - `PATCH /api/task-projects/:id`
 - `POST /api/task-sections`
 - `PATCH /api/task-sections/:id`
+
+Current implemented subset:
+
+- `GET /api/tasks`
+- `POST /api/tasks`
+- `PATCH /api/tasks`
+
+Current auth paths:
+
+- owner browser session
+- bearer token or `x-lifeops-token` using `INTERNAL_API_TOKEN`
 
 Request design requirements:
 
@@ -320,11 +343,11 @@ Exit criteria:
 
 ## Recommended Immediate Backlog
 
-1. Update `docs/schema-draft.md` task-related tables to match the schema delta above.
-2. Replace static task placeholders with Prisma-backed queries.
-3. Build task create/edit/complete flows before adding sophisticated filtering.
-4. Add project sections and section grouping on project pages.
-5. Add `external_source` and `external_key` support before exposing the task API to other applications.
+1. Set and document `INTERNAL_API_TOKEN` for production and local integration testing.
+2. Add `source_type`, `source_key`, and idempotent task create/update behavior.
+3. Add project and section APIs so external callers can place tasks correctly.
+4. Expand the UI from quick capture into full task detail/edit and project section grouping.
+5. Add integration tests and audit logging for machine-to-machine task writes.
 
 ## Open Decisions
 

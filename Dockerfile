@@ -10,6 +10,7 @@ FROM base AS builder
 ENV NODE_OPTIONS=--max-old-space-size=512
 COPY --from=deps /app/node_modules ./node_modules
 COPY . .
+RUN mkdir -p public
 RUN npm run db:generate
 RUN npm run build
 

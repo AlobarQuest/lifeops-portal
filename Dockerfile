@@ -1,10 +1,16 @@
+# syntax=docker/dockerfile:1.7
 FROM node:22-alpine AS base
 WORKDIR /app
 ENV NEXT_TELEMETRY_DISABLED=1
+ENV NPM_CONFIG_AUDIT=false
+ENV NPM_CONFIG_FUND=false
+ENV NPM_CONFIG_PROGRESS=false
+ENV NPM_CONFIG_UPDATE_NOTIFIER=false
 
 FROM base AS deps
+ENV PRISMA_SKIP_POSTINSTALL_GENERATE=true
 COPY package.json package-lock.json* ./
-RUN npm ci --include=dev
+RUN --mount=type=cache,target=/root/.npm npm ci --include=dev --no-audit --no-fund --progress=false
 
 FROM base AS builder
 ENV NODE_OPTIONS=--max-old-space-size=512

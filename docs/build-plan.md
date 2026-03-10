@@ -82,6 +82,7 @@ Exit criteria:
 ### Phase 2: Core MVP Objects
 
 - Build tasks list/detail/create/edit.
+- Add the first task API routes so other Devon-owned applications can create and update tasks through LifeOps Portal.
 - Build projects list/detail/create/edit.
 - Build knowledge list/detail/create/edit.
 - Build dashboard widgets for today, overdue, blocked, and recent context.
@@ -89,6 +90,7 @@ Exit criteria:
 
 Exit criteria:
 - Daily execution workflow works end to end.
+- Another internal application can create a task without writing directly to the database.
 - Project dashboards show status, next actions, links, and knowledge.
 
 ### Phase 3: Intake, Resources, And Search
@@ -117,12 +119,13 @@ Exit criteria:
 1. Create root app scaffold with Docker support.
 2. Implement schema for users, roles, projects, tasks, ideas, knowledge, decisions, resources, and tags.
 3. Build route shell and navigation.
-4. Build task and project CRUD.
-5. Build knowledge CRUD.
-6. Build home dashboard.
-7. Build quick capture and ideas queue.
-8. Build search and resources registry.
-9. Build reviews and stale project surfacing.
+4. Build task CRUD plus initial task API.
+5. Build project CRUD.
+6. Build knowledge CRUD.
+7. Build home dashboard.
+8. Build quick capture and ideas queue.
+9. Build search and resources registry.
+10. Build reviews and stale project surfacing.
 
 ## Open Decisions That Should Be Resolved Early
 

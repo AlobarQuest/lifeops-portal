@@ -12,7 +12,7 @@ This is the first-pass schema to turn the product documents into an implementati
 ## Core Enums
 
 - `project_status`: `draft`, `planned`, `active`, `blocked`, `on_hold`, `completed`, `archived`
-- `task_status`: `inbox`, `todo`, `in_progress`, `blocked`, `done`, `canceled`
+- `task_status`: `inbox`, `next`, `in_progress`, `blocked`, `done`, `canceled`
 - `priority_level`: `low`, `medium`, `high`, `critical`
 - `idea_status`: `captured`, `reviewing`, `approved`, `rejected`, `parked`, `converted`
 - `knowledge_status`: `draft`, `active`, `archived`
@@ -82,21 +82,86 @@ Notes:
 
 - `id`
 - `project_id` nullable
+- `section_id` nullable
+- `parent_task_id` nullable
 - `role_id` nullable
 - `owner_id`
 - `title`
-- `description`
+- `description` nullable
 - `status`
 - `priority`
+- `scheduled_for` nullable
 - `due_at` nullable
+- `deadline_at` nullable
+- `is_recurring`
+- `recurrence_rule` nullable
 - `completed_at` nullable
+- `archived_at` nullable
 - `blocked_reason` nullable
 - `sort_order` nullable
+- `source_type` nullable
+- `source_key` nullable
 - `created_at`
 - `updated_at`
 
 Notes:
 - Use `priority_level` for the `priority` field.
+- Keep inbox tasks projectless until they are clarified.
+- Derive `today`, `overdue`, and `upcoming` from dates instead of storing them as statuses.
+- Use `source_type` and `source_key` to support safe API-driven task creation from other applications.
+
+### `task_sections`
+
+- `id`
+- `project_id`
+- `name`
+- `sort_order`
+- `archived_at` nullable
+- `created_at`
+- `updated_at`
+
+Notes:
+- Sections are project-scoped and should be orderable.
+- This replaces the need to overload status for project-stage grouping.
+
+### `task_labels`
+
+- `id`
+- `slug`
+- `name`
+- `color` nullable
+- `created_at`
+
+Notes:
+- Keep task labels separate from the broader `tags` model if task filtering becomes high-traffic.
+- If the wider tag model is sufficient in production, this table can collapse back into `tags`.
+
+### `task_comments`
+
+- `id`
+- `task_id`
+- `author_id`
+- `body_markdown`
+- `created_at`
+- `updated_at`
+
+Notes:
+- This is optional in the first implementation pass.
+- It becomes important once tasks are created by multiple systems and need durable audit context.
+
+### `task_external_refs`
+
+- `id`
+- `task_id`
+- `source_type`
+- `source_key`
+- `payload_json` nullable
+- `created_at`
+- `updated_at`
+
+Notes:
+- Add a unique index on `source_type + source_key`.
+- This is the preferred place to anchor external-system references if one task can have more than one source relationship.
 
 ### `ideas`
 
@@ -205,6 +270,11 @@ Notes:
 - `task_id`
 - `tag_id`
 
+### `task_labels_tasks`
+
+- `task_id`
+- `task_label_id`
+
 ### `knowledge_item_tags`
 
 - `knowledge_item_id`
@@ -219,6 +289,10 @@ Notes:
 - `connector_definitions`
 - `sync_jobs`
 - `attachments`
+
+Task-specific exception:
+
+- `task_sections` and `task_external_refs` should move into the earlier phases, not stay deferred, because they directly support the task-system replacement goal.
 
 These should not block the first migration.
 
@@ -235,5 +309,6 @@ Use PostgreSQL full-text search before adding any extra service.
 1. Create enums and base tables.
 2. Add one-to-many relations.
 3. Add join tables.
-4. Seed roles and owner account.
-5. Add indexes for `status`, `due_at`, `updated_at`, and search-heavy title fields.
+4. Add task rebuild tables: `task_sections`, `task_external_refs`, and task self-reference.
+5. Seed roles, owner account, and a few starter tasks.
+6. Add indexes for `status`, `due_at`, `updated_at`, `source_type + source_key`, and search-heavy title fields.

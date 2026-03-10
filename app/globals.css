@@ -338,6 +338,17 @@ select {
   gap: 1rem;
 }
 
+.task-form {
+  display: grid;
+  gap: 1rem;
+}
+
+.form-grid {
+  display: grid;
+  grid-template-columns: repeat(2, minmax(0, 1fr));
+  gap: 1rem;
+}
+
 .field {
   display: grid;
   gap: 0.45rem;
@@ -348,12 +359,49 @@ select {
   font-size: 0.95rem;
 }
 
-.field input {
+.field input,
+.field textarea,
+.field select {
   width: 100%;
   padding: 0.9rem 1rem;
   border: 1px solid var(--line);
   border-radius: 16px;
   background: rgba(255, 255, 255, 0.84);
+}
+
+.field textarea {
+  min-height: 96px;
+  resize: vertical;
+}
+
+.task-row {
+  display: flex;
+  align-items: flex-start;
+  justify-content: space-between;
+  gap: 1rem;
+}
+
+.task-row-main {
+  min-width: 0;
+  flex: 1;
+}
+
+.task-actions {
+  display: flex;
+  align-items: center;
+  justify-content: flex-end;
+}
+
+.secondary-inline-button {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  padding: 0.75rem 0.95rem;
+  border: 1px solid var(--line);
+  border-radius: 999px;
+  background: rgba(255, 255, 255, 0.78);
+  color: var(--ink);
+  cursor: pointer;
 }
 
 .error-banner {
@@ -380,7 +428,8 @@ select {
   .shell,
   .two-column,
   .detail-grid,
-  .metrics-grid {
+  .metrics-grid,
+  .form-grid {
     grid-template-columns: 1fr;
   }
 
@@ -399,7 +448,8 @@ select {
 
   .topbar,
   .page-header,
-  .section-heading {
+  .section-heading,
+  .task-row {
     flex-direction: column;
   }
 }

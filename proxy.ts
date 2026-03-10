@@ -4,7 +4,7 @@ import type { NextRequest } from "next/server";
 import { SESSION_COOKIE, verifySessionToken } from "@/lib/auth";
 
 const PUBLIC_PATHS = new Set(["/login"]);
-const PUBLIC_PREFIXES = ["/_next", "/api/health", "/favicon.ico"];
+const PUBLIC_PREFIXES = ["/_next", "/api/health", "/api/tasks", "/favicon.ico"];
 
 export async function proxy(request: NextRequest) {
   const { pathname } = request.nextUrl;

@@ -52,3 +52,4 @@ This repository now contains the initial application scaffold for `LifeOpsPortal
 - `docs/schema-draft.md`
 - `docs/screen-inventory.md`
 - `docs/coolify-deployment-plan.md`
+- `docs/task-system-update-plan.md`

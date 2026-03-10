@@ -1,5 +1,10 @@
 import { PrismaPg } from "@prisma/adapter-pg";
-import { PrismaClient } from "@prisma/client";
+import {
+  PriorityLevel,
+  ProjectStatus,
+  PrismaClient,
+  TaskStatus,
+} from "@prisma/client";
 
 import { hashPassword } from "../lib/password";
 
@@ -28,7 +33,7 @@ async function main() {
   const passwordHash = ownerPassword ? hashPassword(ownerPassword) : undefined;
   const passwordUpdatedAt = passwordHash ? new Date() : undefined;
 
-  await prisma.user.upsert({
+  const owner = await prisma.user.upsert({
     where: { email: ownerEmail },
     update: {
       displayName: "Devon Watkins",
@@ -54,6 +59,66 @@ async function main() {
       where: { slug: role.slug },
       update: role,
       create: role,
+    });
+  }
+
+  const developerRole = await prisma.role.findUnique({
+    where: { slug: "developer" },
+  });
+
+  if (!developerRole) {
+    return;
+  }
+
+  const lifeOpsProject = await prisma.project.upsert({
+    where: { slug: "lifeops-portal" },
+    update: {},
+    create: {
+      slug: "lifeops-portal",
+      name: "LifeOps Portal MVP",
+      summary: "Build the internal control room that replaces fragmented planning and execution tools.",
+      description: "First-party dashboard, task system, and knowledge base for Devon-owned operations.",
+      status: ProjectStatus.ACTIVE,
+      ownerId: owner.id,
+      primaryRoleId: developerRole.id,
+      priority: PriorityLevel.CRITICAL,
+      isActive: true,
+    },
+  });
+
+  const taskCount = await prisma.task.count();
+
+  if (taskCount === 0) {
+    await prisma.task.createMany({
+      data: [
+        {
+          ownerId: owner.id,
+          projectId: lifeOpsProject.id,
+          roleId: developerRole.id,
+          title: "Replace placeholder task page with live task queries",
+          description: "Back the /tasks page with Prisma data, real filters, and a capture flow.",
+          status: TaskStatus.IN_PROGRESS,
+          priority: PriorityLevel.CRITICAL,
+          dueAt: new Date(Date.now() + 1000 * 60 * 60 * 24),
+        },
+        {
+          ownerId: owner.id,
+          projectId: lifeOpsProject.id,
+          roleId: developerRole.id,
+          title: "Stand up the first task API routes",
+          description: "Expose LifeOps tasks through API endpoints so other internal apps can converge on one task layer.",
+          status: TaskStatus.TODO,
+          priority: PriorityLevel.HIGH,
+          dueAt: new Date(Date.now() + 1000 * 60 * 60 * 24 * 2),
+        },
+        {
+          ownerId: owner.id,
+          title: "Import current Todoist workload into LifeOps task planning",
+          description: "Use Todoist as a migration source only and stop treating it as the long-term system of record.",
+          status: TaskStatus.INBOX,
+          priority: PriorityLevel.MEDIUM,
+        },
+      ],
     });
   }
 }

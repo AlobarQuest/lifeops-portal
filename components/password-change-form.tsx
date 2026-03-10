@@ -2,19 +2,20 @@
 
 import { useActionState } from "react";
 
-import {
-  changePasswordAction,
-  initialPasswordChangeState,
-} from "@/app/actions/settings";
+import { changePasswordAction, type PasswordChangeState } from "@/app/actions/settings";
 
 type PasswordChangeFormProps = {
   ownerEmail: string;
 };
 
 export function PasswordChangeForm({ ownerEmail }: PasswordChangeFormProps) {
+  const initialState: PasswordChangeState = {
+    status: "idle",
+    message: "",
+  };
   const [state, formAction, isPending] = useActionState(
     changePasswordAction,
-    initialPasswordChangeState,
+    initialState,
   );
 
   return (

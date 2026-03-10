@@ -35,11 +35,6 @@ export type PasswordChangeState = {
   message: string;
 };
 
-export const initialPasswordChangeState: PasswordChangeState = {
-  status: "idle",
-  message: "",
-};
-
 export async function changePasswordAction(
   _previousState: PasswordChangeState,
   formData: FormData,

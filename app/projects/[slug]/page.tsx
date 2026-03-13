@@ -112,6 +112,10 @@ export default async function ProjectDetailPage({
               <p>{project.tasks.length} linked tasks currently sit under this project.</p>
             </article>
             <article>
+              <strong>Task sections</strong>
+              <p>{project.taskSections.length} active sections currently shape the project board.</p>
+            </article>
+            <article>
               <strong>Last reviewed</strong>
               <p>{formatDateLabel(project.lastReviewedAt)}</p>
             </article>
@@ -167,24 +171,46 @@ export default async function ProjectDetailPage({
         <section className="two-column">
           <SectionCard
             title="Project task board"
-            caption="This is the live project task list. Keep board-specific notes in the Task Board document above, and execution items here."
+            caption="This is the live project task board. Keep board-specific notes in the Task Board document above, and execution items here."
           >
-            <div className="list">
+            <div className="stack">
               {project.tasks.length === 0 ? (
-                <div className="list-item">
-                  <strong>No project tasks yet</strong>
-                  <p>Use the shared task flow to attach work to this project and keep execution visible here.</p>
+                <div className="list">
+                  <div className="list-item">
+                    <strong>No project tasks yet</strong>
+                    <p>Use the shared task flow to attach work to this project and keep execution visible here.</p>
+                  </div>
                 </div>
               ) : null}
 
-              {project.tasks.map((task) => (
-                <div className="list-item" key={task.id}>
-                  <strong>{task.title}</strong>
-                  {task.blockedReason ? <p>Blocked by: {task.blockedReason}</p> : null}
-                  <div className="meta-row">
-                    <span className="pill">{task.statusLabel}</span>
-                    <span className="pill">{task.priorityLabel}</span>
-                    <span className="pill">{task.dueLabel}</span>
+              {project.sectionGroups.map((group) => (
+                <div key={group.id}>
+                  <div className="section-heading">
+                    <div>
+                      <h4>{group.name}</h4>
+                      <p>{group.tasks.length} task{group.tasks.length === 1 ? "" : "s"} in this lane.</p>
+                    </div>
+                  </div>
+
+                  <div className="list">
+                    {group.tasks.length === 0 ? (
+                      <div className="list-item">
+                        <strong>No tasks in this section</strong>
+                        <p>External callers can now place tasks here through the task section APIs.</p>
+                      </div>
+                    ) : null}
+
+                    {group.tasks.map((task) => (
+                      <div className="list-item" key={task.id}>
+                        <strong>{task.title}</strong>
+                        {task.blockedReason ? <p>Blocked by: {task.blockedReason}</p> : null}
+                        <div className="meta-row">
+                          <span className="pill">{task.statusLabel}</span>
+                          <span className="pill">{task.priorityLabel}</span>
+                          <span className="pill">{task.dueLabel}</span>
+                        </div>
+                      </div>
+                    ))}
                   </div>
                 </div>
               ))}

@@ -13,8 +13,16 @@ This repository now contains the initial application scaffold for `LifeOpsPortal
 
 - `/tasks` is now backed by PostgreSQL instead of placeholder site data
 - `/api/tasks` is the first protected task API route for browser and internal-app access
+- `POST /api/tasks` now supports source-aware idempotent create-or-update when `sourceType` and `sourceKey` are provided
+- `PATCH /api/tasks` can now target a task by LifeOps `id` or by the external `(sourceType, sourceKey)` pair
+- `GET /api/tasks` now accepts `includeArchived`, and explicit source lookups can return completed or archived tasks without disappearing behind the default active-task view
+- `/api/tasks/[id]`, `/api/tasks/[id]/complete`, `/api/tasks/[id]/reopen`, and `/api/tasks/[id]/archive` now provide path-based task reads and state transitions for external callers
+- task API writes now create `TaskAuditEvent` rows with auth method, request metadata, payload, and task snapshot context
+- `/tasks` now supports browser-side inline task editing, project/section reassignment, and archive controls
+- `/api/task-projects` now supports project lookup, creation, and update for machine callers that need real project IDs before writing tasks
+- `/api/task-sections` now supports section lookup, creation, and update for project-scoped task organization
 - external applications are intended to use LifeOps Portal as the shared task layer instead of Todoist
-- machine-to-machine task access uses `INTERNAL_API_TOKEN`, but the broader external-app contract still needs idempotency, source attribution, and helper routes
+- machine-to-machine task access uses `INTERNAL_API_TOKEN`, while parent tasks, labels, recurrence, and deeper auditability still remain to be built
 
 ## Project Layout
 
@@ -36,11 +44,18 @@ This repository now contains the initial application scaffold for `LifeOpsPortal
    - `npm run db:generate`
    - `npm run db:migrate`
    - `npm run db:seed`
+6. Run the task-platform integration suite against the local Postgres database:
+   - `npm run test:integration`
+7. Smoke the real HTTP bearer-token flow with a running app:
+   - `LIFEOPS_API_BASE_URL=http://127.0.0.1:3000 LIFEOPS_API_TOKEN=test-internal-token npm run smoke:task-api`
 
 ## Deployment Shape
 
+- GitHub Actions runs `.github/workflows/ci.yml` on pull requests and `main`, including TypeScript, lint, build, Prisma migrate/seed, and `npm run test:integration`
 - GitHub Actions publishes the root `Dockerfile` to GHCR through `.github/workflows/publish-image.yml`
+- `.github/workflows/publish-image.yml` now waits for a successful `CI` run on `main` before pushing `ghcr.io/alobarquest/lifeops-portal`
 - Coolify runs a Docker Image application that pulls `ghcr.io/alobarquest/lifeops-portal`
+- first external-caller rollout now has a concrete runbook in `docs/task-api-first-caller-runbook.md` and a smoke client in `scripts/task-api-smoke.ts`
 - Do not switch production back to source builds on the current Coolify host unless server capacity changes
 - Separate Coolify PostgreSQL resource
 - Production domain: `portal.devonwatkins.com`
@@ -58,6 +73,7 @@ This repository now contains the initial application scaffold for `LifeOpsPortal
 - `docs/schema-draft.md`
 - `docs/screen-inventory.md`
 - `docs/coolify-deployment-plan.md`
+- `docs/task-api-first-caller-runbook.md`
 - `docs/task-system-update-plan.md`
 - `docs/task-api-external-access-plan.md`
 

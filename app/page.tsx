@@ -89,6 +89,7 @@ export default async function HomePage() {
                     <span className="pill">{getTaskStatusLabel(task.status)}</span>
                     <span className="pill">{getTaskPriorityLabel(task.priority)}</span>
                     <span className="pill">{formatTaskDueLabel(task.dueAt)}</span>
+                    {task.section ? <span className="pill">{task.section.name}</span> : null}
                   </div>
                 </div>
               ))}

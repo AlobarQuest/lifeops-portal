@@ -165,6 +165,47 @@ async function main() {
   const developerRole = rolesBySlug.get("developer");
   const realtorRole = rolesBySlug.get("realtor");
   const adjusterRole = rolesBySlug.get("adjuster");
+  const seededSectionsByKey = new Map<string, { id: string; projectId: string; name: string }>();
+
+  for (const sectionSeed of [
+    lifeOpsProject
+      ? { projectId: lifeOpsProject.id, name: "Platform", sortOrder: 0 }
+      : null,
+    lifeOpsProject
+      ? { projectId: lifeOpsProject.id, name: "Integrations", sortOrder: 1 }
+      : null,
+    realtorProject
+      ? { projectId: realtorProject.id, name: "Pipeline", sortOrder: 0 }
+      : null,
+    adjusterProject
+      ? { projectId: adjusterProject.id, name: "Playbook Buildout", sortOrder: 0 }
+      : null,
+  ]) {
+    if (!sectionSeed) {
+      continue;
+    }
+
+    const section = await prisma.taskSection.upsert({
+      where: {
+        projectId_name: {
+          projectId: sectionSeed.projectId,
+          name: sectionSeed.name,
+        },
+      },
+      update: {
+        sortOrder: sectionSeed.sortOrder,
+        archivedAt: null,
+      },
+      create: sectionSeed,
+      select: {
+        id: true,
+        projectId: true,
+        name: true,
+      },
+    });
+
+    seededSectionsByKey.set(`${section.projectId}:${section.name}`, section);
+  }
 
   const taskCount = await prisma.task.count();
 
@@ -174,6 +215,7 @@ async function main() {
         {
           ownerId: owner.id,
           projectId: lifeOpsProject.id,
+          sectionId: seededSectionsByKey.get(`${lifeOpsProject.id}:Platform`)?.id,
           roleId: developerRole.id,
           title: "Replace placeholder task page with live task queries",
           description: "Back the /tasks page with Prisma data, real filters, and a capture flow.",
@@ -184,6 +226,7 @@ async function main() {
         {
           ownerId: owner.id,
           projectId: lifeOpsProject.id,
+          sectionId: seededSectionsByKey.get(`${lifeOpsProject.id}:Integrations`)?.id,
           roleId: developerRole.id,
           title: "Stand up the first task API routes",
           description: "Expose LifeOps tasks through API endpoints so other internal apps can converge on one task layer.",
@@ -203,6 +246,7 @@ async function main() {
               {
                 ownerId: owner.id,
                 projectId: realtorProject.id,
+                sectionId: seededSectionsByKey.get(`${realtorProject.id}:Pipeline`)?.id,
                 roleId: realtorRole.id,
                 title: "Document the current listing-to-close workflow",
                 description: "Capture the real-world process and move it into the new project document pack.",
@@ -216,6 +260,7 @@ async function main() {
               {
                 ownerId: owner.id,
                 projectId: adjusterProject.id,
+                sectionId: seededSectionsByKey.get(`${adjusterProject.id}:Playbook Buildout`)?.id,
                 roleId: adjusterRole.id,
                 title: "Inventory field notes for the adjuster playbook",
                 description: "Pull scattered notes into one documented operating flow inside the project workspace.",

@@ -2,10 +2,12 @@ import {
   PriorityLevel,
   Prisma,
   TaskStatus,
+  type PrismaClient,
 } from "@prisma/client";
 
 import { prisma } from "@/lib/db";
 import { parseDueOn, type TaskView } from "@/lib/task-validators";
+import { getOwnedTaskSectionContext } from "@/lib/task-sections";
 
 const taskListInclude = {
   project: {
@@ -13,6 +15,14 @@ const taskListInclude = {
       id: true,
       slug: true,
       name: true,
+    },
+  },
+  section: {
+    select: {
+      id: true,
+      name: true,
+      sortOrder: true,
+      projectId: true,
     },
   },
   role: {
@@ -27,6 +37,31 @@ const taskListInclude = {
 export type TaskListItem = Prisma.TaskGetPayload<{
   include: typeof taskListInclude;
 }>;
+type TaskDbClient = PrismaClient | Prisma.TransactionClient;
+
+type TaskMutableFields = {
+  title?: string;
+  description?: string | null;
+  priority?: PriorityLevel;
+  status?: TaskStatus;
+  dueOn?: string | null;
+  projectId?: string | null;
+  sectionId?: string | null;
+  blockedReason?: string | null;
+};
+
+type TaskCreateInput = TaskMutableFields & {
+  ownerId: string;
+  title: string;
+  priority: PriorityLevel;
+  status: TaskStatus;
+  description?: string;
+  dueOn?: string;
+  projectId?: string;
+  sectionId?: string;
+  sourceType?: string;
+  sourceKey?: string;
+};
 
 export function getTaskStatusLabel(status: TaskStatus) {
   switch (status) {
@@ -122,18 +157,42 @@ function buildTaskWhere({
   ownerId,
   view,
   projectId,
+  sectionId,
   status,
+  sourceType,
+  sourceKey,
+  includeArchived,
 }: {
   ownerId?: string;
   view: TaskView;
   projectId?: string;
+  sectionId?: string;
   status?: TaskStatus;
+  sourceType?: string;
+  sourceKey?: string;
+  includeArchived?: boolean;
 }): Prisma.TaskWhereInput {
   const { start, end } = getTodayBounds();
   const where: Prisma.TaskWhereInput = ownerId ? { ownerId } : {};
 
+  if (!includeArchived && !sourceType && !sourceKey) {
+    where.archivedAt = null;
+  }
+
   if (projectId) {
     where.projectId = projectId;
+  }
+
+  if (sectionId) {
+    where.sectionId = sectionId;
+  }
+
+  if (sourceType) {
+    where.sourceType = sourceType;
+  }
+
+  if (sourceKey) {
+    where.sourceKey = sourceKey;
   }
 
   if (status) {
@@ -168,9 +227,11 @@ function buildTaskWhere({
         break;
       case "all":
       default:
-        where.status = {
-          in: [TaskStatus.INBOX, TaskStatus.TODO, TaskStatus.IN_PROGRESS, TaskStatus.BLOCKED],
-        };
+        if (!sourceType && !sourceKey) {
+          where.status = {
+            in: [TaskStatus.INBOX, TaskStatus.TODO, TaskStatus.IN_PROGRESS, TaskStatus.BLOCKED],
+          };
+        }
         break;
     }
   }
@@ -182,17 +243,25 @@ export async function listTasks({
   ownerId,
   view = "all",
   projectId,
+  sectionId,
   status,
   limit,
+  sourceType,
+  sourceKey,
+  includeArchived,
 }: {
   ownerId?: string;
   view?: TaskView;
   projectId?: string;
+  sectionId?: string;
   status?: TaskStatus;
   limit?: number;
+  sourceType?: string;
+  sourceKey?: string;
+  includeArchived?: boolean;
 }) {
   return prisma.task.findMany({
-    where: buildTaskWhere({ ownerId, view, projectId, status }),
+    where: buildTaskWhere({ ownerId, view, projectId, sectionId, status, sourceType, sourceKey, includeArchived }),
     include: taskListInclude,
     orderBy: [
       {
@@ -208,7 +277,10 @@ export async function listTasks({
 
 export async function getTaskCounts(ownerId?: string) {
   const { start, end } = getTodayBounds();
-  const baseWhere = ownerId ? { ownerId } : {};
+  const baseWhere = {
+    ...(ownerId ? { ownerId } : {}),
+    archivedAt: null,
+  };
 
   const [all, inbox, today, overdue, blocked, completed] = await Promise.all([
     prisma.task.count({
@@ -285,14 +357,169 @@ export async function listTaskProjects() {
   });
 }
 
-export async function getTaskById(taskId: string, ownerId?: string) {
-  return prisma.task.findFirst({
+export async function getTaskById(
+  taskId: string,
+  ownerId?: string,
+  options?: { includeArchived?: boolean; db?: TaskDbClient },
+) {
+  const db = options?.db ?? prisma;
+
+  return db.task.findFirst({
     where: {
       id: taskId,
       ...(ownerId ? { ownerId } : {}),
+      ...(!options?.includeArchived ? { archivedAt: null } : {}),
     },
     include: taskListInclude,
   });
+}
+
+export async function getTaskBySource({
+  ownerId,
+  sourceType,
+  sourceKey,
+  includeArchived,
+  db,
+}: {
+  ownerId: string;
+  sourceType: string;
+  sourceKey: string;
+  includeArchived?: boolean;
+  db?: TaskDbClient;
+}) {
+  const client = db ?? prisma;
+
+  return client.task.findFirst({
+    where: {
+      ownerId,
+      sourceType,
+      sourceKey,
+      ...(!includeArchived ? { archivedAt: null } : {}),
+    },
+    include: taskListInclude,
+  });
+}
+
+function buildTaskCreateData({
+  ownerId,
+  title,
+  description,
+  priority,
+  status,
+  dueOn,
+  projectId,
+  sectionId,
+  sourceType,
+  sourceKey,
+}: TaskCreateInput): Prisma.TaskUncheckedCreateInput {
+  return {
+    ownerId,
+    title,
+    description,
+    priority,
+    status,
+    dueAt: parseDueOn(dueOn),
+    projectId,
+    sectionId,
+    sourceType,
+    sourceKey,
+  };
+}
+
+function buildTaskUpdateData(data: TaskMutableFields): Prisma.TaskUncheckedUpdateInput {
+  return {
+    ...(data.title !== undefined ? { title: data.title } : {}),
+    ...(data.description !== undefined ? { description: data.description } : {}),
+    ...(data.priority !== undefined ? { priority: data.priority } : {}),
+    ...(data.status !== undefined
+      ? {
+          status: data.status,
+          completedAt: data.status === TaskStatus.DONE ? new Date() : null,
+        }
+      : {}),
+    ...(data.dueOn !== undefined ? { dueAt: data.dueOn ? parseDueOn(data.dueOn) : null } : {}),
+    ...(data.projectId !== undefined ? { projectId: data.projectId ?? null } : {}),
+    ...(data.sectionId !== undefined ? { sectionId: data.sectionId ?? null } : {}),
+    ...(data.blockedReason !== undefined ? { blockedReason: data.blockedReason ?? null } : {}),
+  };
+}
+
+async function assertOwnedProject(projectId: string, ownerId: string, db: TaskDbClient = prisma) {
+  const project = await db.project.findFirst({
+    where: {
+      id: projectId,
+      ownerId,
+    },
+    select: {
+      id: true,
+    },
+  });
+
+  if (!project) {
+    throw new Error("Project not found.");
+  }
+
+  return project;
+}
+
+async function resolveTaskRelationIds({
+  ownerId,
+  projectId,
+  sectionId,
+}: {
+  ownerId: string;
+  projectId?: string | null;
+  sectionId?: string | null;
+}, db: TaskDbClient = prisma) {
+  let resolvedProjectId = projectId;
+  let resolvedSectionId = sectionId;
+
+  if (resolvedSectionId) {
+    const section = await getOwnedTaskSectionContext(resolvedSectionId, ownerId, db);
+
+    if (!section || section.archivedAt) {
+      throw new Error("Section not found.");
+    }
+
+    if (resolvedProjectId && section.project.id !== resolvedProjectId) {
+      throw new Error("Section does not belong to the selected project.");
+    }
+
+    resolvedProjectId = section.project.id;
+  }
+
+  if (resolvedProjectId) {
+    await assertOwnedProject(resolvedProjectId, ownerId, db);
+  }
+
+  if (resolvedProjectId === null) {
+    resolvedSectionId = null;
+  }
+
+  return {
+    projectId: resolvedProjectId,
+    sectionId: resolvedSectionId,
+  };
+}
+
+async function assertOwnedTask(taskId: string, ownerId: string, db: TaskDbClient = prisma) {
+  const task = await db.task.findFirst({
+    where: {
+      id: taskId,
+      ownerId,
+    },
+    select: {
+      id: true,
+      projectId: true,
+      sectionId: true,
+    },
+  });
+
+  if (!task) {
+    throw new Error("Task not found.");
+  }
+
+  return task;
 }
 
 export async function createTaskRecord({
@@ -303,65 +530,146 @@ export async function createTaskRecord({
   status,
   dueOn,
   projectId,
-}: {
-  ownerId: string;
-  title: string;
-  description?: string;
-  priority: PriorityLevel;
-  status: TaskStatus;
-  dueOn?: string;
-  projectId?: string;
-}) {
-  return prisma.task.create({
-    data: {
+  sectionId,
+  sourceType,
+  sourceKey,
+}: TaskCreateInput, db: TaskDbClient = prisma) {
+  const relationIds = await resolveTaskRelationIds({
+    ownerId,
+    projectId,
+    sectionId,
+  }, db);
+
+  return db.task.create({
+    data: buildTaskCreateData({
       ownerId,
       title,
       description,
       priority,
       status,
-      dueAt: parseDueOn(dueOn),
-      projectId,
-    },
+      dueOn,
+      projectId: relationIds.projectId ?? undefined,
+      sectionId: relationIds.sectionId ?? undefined,
+      sourceType,
+      sourceKey,
+    }),
+    include: taskListInclude,
   });
+}
+
+export async function createOrUpsertTaskRecord(input: TaskCreateInput) {
+  return createOrUpsertTaskRecordWithDb(input, prisma);
+}
+
+export async function createOrUpsertTaskRecordWithDb(input: TaskCreateInput, db: TaskDbClient) {
+  if (input.sourceType && input.sourceKey) {
+    const existingTask = await getTaskBySource({
+      ownerId: input.ownerId,
+      sourceType: input.sourceType,
+      sourceKey: input.sourceKey,
+      includeArchived: true,
+      db,
+    });
+
+    if (existingTask) {
+      await updateTaskRecord(existingTask.id, input.ownerId, {
+        title: input.title,
+        description: input.description,
+        priority: input.priority,
+        status: input.status,
+        dueOn: input.dueOn,
+        projectId: input.projectId,
+        sectionId: input.sectionId,
+      }, db);
+      if (existingTask.archivedAt) {
+        await setTaskArchived(existingTask.id, input.ownerId, false, db);
+      }
+
+      const task = await getTaskById(existingTask.id, input.ownerId, { includeArchived: true, db });
+
+      return {
+        task: task ?? existingTask,
+        created: false,
+      };
+    }
+  }
+
+  const task = await createTaskRecord(input, db);
+
+  return {
+    task,
+    created: true,
+  };
 }
 
 export async function updateTaskRecord(
   taskId: string,
-  data: {
-    title?: string;
-    description?: string;
-    priority?: PriorityLevel;
-    status?: TaskStatus;
-    dueOn?: string;
-    projectId?: string;
-    blockedReason?: string;
-  },
+  ownerId: string,
+  data: TaskMutableFields,
+  db: TaskDbClient = prisma,
 ) {
-  return prisma.task.update({
+  const existingTask = await assertOwnedTask(taskId, ownerId, db);
+  const shouldResolveRelations = data.projectId !== undefined || data.sectionId !== undefined;
+  let relationData: Pick<TaskMutableFields, "projectId" | "sectionId"> = {};
+
+  if (shouldResolveRelations) {
+    const targetProjectId = data.projectId !== undefined ? data.projectId : existingTask.projectId;
+    let targetSectionId = data.sectionId !== undefined ? data.sectionId : existingTask.sectionId;
+
+    if (data.projectId !== undefined && data.sectionId === undefined && data.projectId !== existingTask.projectId) {
+      targetSectionId = null;
+    }
+
+    const resolvedRelations = await resolveTaskRelationIds({
+      ownerId,
+      projectId: targetProjectId,
+      sectionId: targetSectionId,
+    }, db);
+
+    relationData = {
+      projectId: resolvedRelations.projectId ?? null,
+      sectionId: resolvedRelations.sectionId ?? null,
+    };
+  }
+
+  return db.task.update({
     where: { id: taskId },
-    data: {
-      ...(data.title !== undefined ? { title: data.title } : {}),
-      ...(data.description !== undefined ? { description: data.description } : {}),
-      ...(data.priority !== undefined ? { priority: data.priority } : {}),
-      ...(data.status !== undefined
-        ? {
-            status: data.status,
-            completedAt: data.status === TaskStatus.DONE ? new Date() : null,
-          }
-        : {}),
-      ...(data.dueOn !== undefined ? { dueAt: parseDueOn(data.dueOn) ?? null } : {}),
-      ...(data.projectId !== undefined ? { projectId: data.projectId ?? null } : {}),
-      ...(data.blockedReason !== undefined ? { blockedReason: data.blockedReason } : {}),
-    },
+    data: buildTaskUpdateData({
+      ...data,
+      ...relationData,
+    }),
   });
 }
 
-export async function setTaskCompletion(taskId: string, isComplete: boolean) {
-  return prisma.task.update({
+export async function setTaskCompletion(
+  taskId: string,
+  ownerId: string,
+  isComplete: boolean,
+  db: TaskDbClient = prisma,
+) {
+  await assertOwnedTask(taskId, ownerId, db);
+
+  return db.task.update({
     where: { id: taskId },
     data: {
       status: isComplete ? TaskStatus.DONE : TaskStatus.TODO,
       completedAt: isComplete ? new Date() : null,
+    },
+  });
+}
+
+export async function setTaskArchived(
+  taskId: string,
+  ownerId: string,
+  isArchived: boolean,
+  db: TaskDbClient = prisma,
+) {
+  await assertOwnedTask(taskId, ownerId, db);
+
+  return db.task.update({
+    where: { id: taskId },
+    data: {
+      archivedAt: isArchived ? new Date() : null,
     },
   });
 }
@@ -377,12 +685,23 @@ export function serializeTask(task: TaskListItem) {
     priorityLabel: getTaskPriorityLabel(task.priority),
     dueAt: task.dueAt?.toISOString() ?? null,
     dueLabel: formatTaskDueLabel(task.dueAt),
+    archivedAt: task.archivedAt?.toISOString() ?? null,
     blockedReason: task.blockedReason,
+    sourceType: task.sourceType,
+    sourceKey: task.sourceKey,
     project: task.project
       ? {
           id: task.project.id,
           slug: task.project.slug,
           name: task.project.name,
+        }
+      : null,
+    section: task.section
+      ? {
+          id: task.section.id,
+          name: task.section.name,
+          sortOrder: task.section.sortOrder,
+          projectId: task.section.projectId,
         }
       : null,
     role: task.role

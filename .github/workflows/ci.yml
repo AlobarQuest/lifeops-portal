@@ -1,0 +1,75 @@
+name: CI
+
+on:
+  pull_request:
+  push:
+    branches:
+      - main
+
+permissions:
+  contents: read
+
+concurrency:
+  group: ci-${{ github.workflow }}-${{ github.ref }}
+  cancel-in-progress: true
+
+jobs:
+  verify:
+    runs-on: ubuntu-latest
+
+    services:
+      postgres:
+        image: postgres:16
+        env:
+          POSTGRES_DB: lifeops_portal
+          POSTGRES_PASSWORD: postgres
+          POSTGRES_USER: postgres
+        ports:
+          - 5432:5432
+        options: >-
+          --health-cmd "pg_isready -U postgres -d lifeops_portal"
+          --health-interval 10s
+          --health-timeout 5s
+          --health-retries 5
+
+    env:
+      AUTH_EMAIL: devon.watkins@gmail.com
+      AUTH_PASSWORD: change-me
+      DATABASE_URL: postgresql://postgres:postgres@127.0.0.1:5432/lifeops_portal
+      INTERNAL_API_TOKEN: test-internal-token
+      OWNER_EMAIL: devon.watkins@gmail.com
+      SESSION_SECRET: test-session-secret
+
+    steps:
+      - name: Check out source
+        uses: actions/checkout@v4
+
+      - name: Set up Node.js
+        uses: actions/setup-node@v4
+        with:
+          node-version: 22
+          cache: npm
+
+      - name: Install dependencies
+        run: npm ci
+
+      - name: Generate Prisma client
+        run: npm run db:generate
+
+      - name: Apply Prisma migrations
+        run: npx prisma migrate deploy
+
+      - name: Seed database
+        run: npm run db:seed
+
+      - name: Typecheck
+        run: npx tsc --noEmit
+
+      - name: Lint
+        run: npm run lint
+
+      - name: Build
+        run: npm run build
+
+      - name: Run integration tests
+        run: npm run test:integration

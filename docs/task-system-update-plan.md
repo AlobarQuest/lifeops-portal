@@ -26,12 +26,31 @@ Current implementation state on 2026-03-10:
 - browser auth works through the normal owner session
 - machine-to-machine access is designed but still needs `INTERNAL_API_TOKEN` configured in production
 
+Current implementation state on 2026-03-12:
+
+- task records now support `sourceType` and `sourceKey`
+- `POST /api/tasks` now provides source-aware idempotent create-or-update
+- `PATCH /api/tasks` can resolve a task by internal `id` or external `(sourceType, sourceKey)`
+- `GET /api/tasks` can filter by source reference for external callers
+- task records now support soft archiving through `archivedAt`
+- path-based task routes now exist for direct read, update, complete, reopen, and archive actions
+- `/tasks` now supports browser-side inline editing, project and section reassignment, and archive visibility toggles
+- `/api/task-projects` now supports project lookup, creation, and update for external task clients
+- `/api/task-sections` now supports section lookup, creation, and update for external task clients
+- project pages now group live tasks by section instead of showing only a flat related-task list
+- a real integration test harness now covers the core task API flows against local PostgreSQL
+
+Current implementation state on 2026-03-13:
+
+- task API writes now create `TaskAuditEvent` rows with auth type, request path, request payload, and post-write task snapshot data
+- integration tests now assert the audit event sequence for the main task write flows
+
 What is still missing before broad app-to-app use:
 
-- idempotent create/update behavior
-- source attribution fields
-- project and section helper APIs
-- a richer task model with sections, parent tasks, labels, and recurrence
+- a richer task model with parent tasks, labels, and recurrence
+- richer external-ref history beyond the single source pair
+- a fuller task detail or drawer UX beyond the current inline editor
+- clearer API compatibility and versioning rules for external callers
 
 ## Todoist Benchmark Findings
 
@@ -172,6 +191,17 @@ Current implemented subset:
 - `GET /api/tasks`
 - `POST /api/tasks`
 - `PATCH /api/tasks`
+- `GET /api/tasks/:id`
+- `PATCH /api/tasks/:id`
+- `POST /api/tasks/:id/complete`
+- `POST /api/tasks/:id/reopen`
+- `POST /api/tasks/:id/archive`
+- `GET /api/task-projects`
+- `POST /api/task-projects`
+- `PATCH /api/task-projects`
+- `GET /api/task-sections`
+- `POST /api/task-sections`
+- `PATCH /api/task-sections`
 
 Current auth paths:
 
@@ -348,6 +378,11 @@ Exit criteria:
 3. Add project and section APIs so external callers can place tasks correctly.
 4. Expand the UI from quick capture into full task detail/edit and project section grouping.
 5. Add integration tests and audit logging for machine-to-machine task writes.
+
+Status:
+
+- Items 2 through 5 now have a first real implementation.
+- Item 1 still needs production rollout and explicit operational documentation.
 
 ## Open Decisions
 

@@ -1,12 +1,13 @@
 import Link from "next/link";
 import { redirect } from "next/navigation";
 
-import { toggleTaskCompletionAction } from "@/app/actions/tasks";
 import { AppShell } from "@/components/app-shell";
 import { PageHeader } from "@/components/page-header";
 import { SectionCard } from "@/components/section-card";
+import { TaskListManager } from "@/components/task-list-manager";
 import { TaskQuickAddForm } from "@/components/task-quick-add-form";
 import { getCurrentUser } from "@/lib/current-user";
+import { listTaskSectionsForApi } from "@/lib/task-sections";
 import {
   formatTaskDueLabel,
   getTaskCounts,
@@ -21,10 +22,38 @@ import { type TaskView, taskViewValues } from "@/lib/task-validators";
 type TasksPageProps = {
   searchParams: Promise<{
     view?: string;
+    includeArchived?: string;
   }>;
 };
 
 const taskViews: TaskView[] = [...taskViewValues];
+
+function formatTaskDateInput(date: Date | null) {
+  if (!date) {
+    return undefined;
+  }
+
+  const year = date.getUTCFullYear();
+  const month = `${date.getUTCMonth() + 1}`.padStart(2, "0");
+  const day = `${date.getUTCDate()}`.padStart(2, "0");
+
+  return `${year}-${month}-${day}`;
+}
+
+function buildTasksHref(view: TaskView, includeArchived: boolean) {
+  const params = new URLSearchParams();
+
+  if (view !== "all") {
+    params.set("view", view);
+  }
+
+  if (includeArchived) {
+    params.set("includeArchived", "true");
+  }
+
+  const query = params.toString();
+  return query ? `/tasks?${query}` : "/tasks";
+}
 
 export default async function TasksPage({ searchParams }: TasksPageProps) {
   const currentUser = await getCurrentUser();
@@ -35,15 +64,55 @@ export default async function TasksPage({ searchParams }: TasksPageProps) {
 
   const params = await searchParams;
   const activeView = taskViews.includes(params.view as TaskView) ? (params.view as TaskView) : "all";
+  const includeArchived = params.includeArchived === "true";
 
-  const [tasks, counts, projectOptions] = await Promise.all([
+  const [tasks, counts, projectOptions, sectionOptions] = await Promise.all([
     listTasks({
       ownerId: currentUser.id,
       view: activeView,
+      includeArchived,
     }),
     getTaskCounts(currentUser.id),
     listTaskProjects(),
+    listTaskSectionsForApi({
+      ownerId: currentUser.id,
+      limit: 200,
+    }),
   ]);
+
+  const taskItems = tasks.map((task) => ({
+    id: task.id,
+    title: task.title,
+    description: task.description,
+    status: task.status,
+    statusLabel: getTaskStatusLabel(task.status),
+    priority: task.priority,
+    priorityLabel: getTaskPriorityLabel(task.priority),
+    dueLabel: formatTaskDueLabel(task.dueAt),
+    dueOn: formatTaskDateInput(task.dueAt),
+    updatedAt: task.updatedAt.toISOString(),
+    blockedReason: task.blockedReason,
+    archivedAt: task.archivedAt?.toISOString() ?? null,
+    project: task.project
+      ? {
+          id: task.project.id,
+          name: task.project.name,
+        }
+      : null,
+    section: task.section
+      ? {
+          id: task.section.id,
+          name: task.section.name,
+          projectId: task.section.projectId,
+        }
+      : null,
+    role: task.role
+      ? {
+          id: task.role.id,
+          name: task.role.name,
+        }
+      : null,
+  }));
 
   return (
     <AppShell eyebrow="Execution" title="Tasks">
@@ -68,7 +137,7 @@ export default async function TasksPage({ searchParams }: TasksPageProps) {
             <div className="pill-row">
               {taskViews.map((view) => {
                 const count = counts[view];
-                const href = view === "all" ? "/tasks" : `/tasks?view=${view}`;
+                const href = buildTasksHref(view, includeArchived);
 
                 return (
                   <Link
@@ -80,6 +149,12 @@ export default async function TasksPage({ searchParams }: TasksPageProps) {
                   </Link>
                 );
               })}
+              <Link
+                className={`filter-pill ${includeArchived ? "active" : ""}`}
+                href={buildTasksHref(activeView, !includeArchived)}
+              >
+                {includeArchived ? "Hide archived" : "Show archived"}
+              </Link>
             </div>
 
             <div className="detail-grid">
@@ -103,12 +178,16 @@ export default async function TasksPage({ searchParams }: TasksPageProps) {
           title={`${getTaskViewLabel(activeView)} tasks`}
           caption={
             tasks.length > 0
-              ? "This list is now backed by the database instead of placeholder site data."
-              : "No tasks match this view yet. Capture one above to start replacing the external task system."
+              ? includeArchived
+                ? "Active and archived tasks are visible in this query. Archive controls now keep older work out of the default execution views."
+                : "This list is now backed by the database instead of placeholder site data."
+              : includeArchived
+                ? "No tasks match this view, even with archived visibility enabled."
+                : "No tasks match this view yet. Capture one above to start replacing the external task system."
           }
         >
-          <div className="list">
-            {tasks.length === 0 ? (
+          {taskItems.length === 0 ? (
+            <div className="list">
               <div className="list-item">
                 <strong>No tasks yet</strong>
                 <p>
@@ -116,39 +195,18 @@ export default async function TasksPage({ searchParams }: TasksPageProps) {
                   entrypoint for other internal applications.
                 </p>
               </div>
-            ) : null}
-
-            {tasks.map((task) => (
-              <div className="list-item task-row" key={task.id}>
-                <div className="task-row-main">
-                  <strong>{task.title}</strong>
-                  <p>{task.project?.name ?? "Inbox / unassigned project"}</p>
-                  {task.description ? <p>{task.description}</p> : null}
-                  {task.blockedReason ? <p>Blocked by: {task.blockedReason}</p> : null}
-                  <div className="meta-row">
-                    <span className="pill">{getTaskStatusLabel(task.status)}</span>
-                    <span className="pill">{getTaskPriorityLabel(task.priority)}</span>
-                    <span className="pill">{formatTaskDueLabel(task.dueAt)}</span>
-                    {task.role ? <span className="pill">{task.role.name}</span> : null}
-                  </div>
-                </div>
-
-                <div className="task-actions">
-                  <form action={toggleTaskCompletionAction}>
-                    <input name="taskId" type="hidden" value={task.id} />
-                    <input
-                      name="mode"
-                      type="hidden"
-                      value={task.status === "DONE" ? "reopen" : "complete"}
-                    />
-                    <button className="secondary-inline-button" type="submit">
-                      {task.status === "DONE" ? "Reopen" : "Mark done"}
-                    </button>
-                  </form>
-                </div>
-              </div>
-            ))}
-          </div>
+            </div>
+          ) : (
+            <TaskListManager
+              projectOptions={projectOptions}
+              sectionOptions={sectionOptions.map((section) => ({
+                id: section.id,
+                name: section.name,
+                projectId: section.project.id,
+              }))}
+              tasks={taskItems}
+            />
+          )}
         </SectionCard>
       </div>
     </AppShell>

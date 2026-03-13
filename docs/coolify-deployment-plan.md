@@ -92,6 +92,7 @@ Notes:
 - Keep secrets in Coolify, not in the repository.
 - The only system still building the image should be GitHub Actions or another external builder.
 - `INTERNAL_API_TOKEN` is required before other internal applications can call the task API as machine clients.
+- The first-caller rollout and token cutover process are documented in `docs/task-api-first-caller-runbook.md`.
 - If GHCR remains private, Coolify must have working registry credentials before rollout. Public repository visibility alone does not make the container package public.
 
 ## Database Plan
@@ -129,6 +130,16 @@ Before the first production deployment:
 6. Secrets are stored in Coolify.
 7. Database backups are enabled.
 8. Coolify pulls the latest image without building on the host.
+
+## First Caller Verification
+
+After the app is live and `INTERNAL_API_TOKEN` is set in Coolify:
+
+1. Store the same token in the first external caller.
+2. Run the repo smoke client against production:
+   `LIFEOPS_API_BASE_URL=https://portal.devonwatkins.com LIFEOPS_API_TOKEN='<token>' npm run smoke:task-api`
+3. Confirm the script completes successfully.
+4. If needed, inspect `TaskAuditEvent` rows to trace the request path and payload that came through the bearer-token route.
 
 ## Why GHCR Image Over Host Builds
 

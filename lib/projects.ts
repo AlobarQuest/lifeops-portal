@@ -66,8 +66,27 @@ const projectWorkspaceSelect = {
       updatedAt: true,
     },
   },
+  taskSections: {
+    where: {
+      archivedAt: null,
+    },
+    orderBy: [
+      {
+        sortOrder: "asc",
+      },
+      {
+        name: "asc",
+      },
+    ],
+    select: {
+      id: true,
+      name: true,
+      sortOrder: true,
+    },
+  },
   tasks: {
     where: {
+      archivedAt: null,
       status: {
         in: [TaskStatus.INBOX, TaskStatus.TODO, TaskStatus.IN_PROGRESS, TaskStatus.BLOCKED, TaskStatus.DONE],
       },
@@ -87,6 +106,13 @@ const projectWorkspaceSelect = {
       priority: true,
       dueAt: true,
       blockedReason: true,
+      section: {
+        select: {
+          id: true,
+          name: true,
+          sortOrder: true,
+        },
+      },
     },
   },
 } satisfies Prisma.ProjectSelect;
@@ -102,9 +128,24 @@ export type ProjectListItem = Prisma.ProjectGetPayload<{
   select: typeof projectListSelect;
 }>;
 
-export type ProjectWorkspace = Prisma.ProjectGetPayload<{
+type ProjectWorkspaceRecord = Prisma.ProjectGetPayload<{
   select: typeof projectWorkspaceSelect;
 }>;
+
+type ProjectWorkspaceTask = ProjectWorkspaceRecord["tasks"][number] & {
+  statusLabel: string;
+  priorityLabel: string;
+  dueLabel: string;
+};
+
+export type ProjectWorkspace = Omit<ProjectWorkspaceRecord, "tasks"> & {
+  tasks: ProjectWorkspaceTask[];
+  sectionGroups: Array<{
+    id: string;
+    name: string;
+    tasks: ProjectWorkspaceTask[];
+  }>;
+};
 
 export type ProjectRoleOption = {
   id: string;
@@ -215,13 +256,38 @@ function sortProjectDocuments<T extends { type: ProjectDocumentType }>(documents
   });
 }
 
-function formatProjectTask(task: ProjectWorkspace["tasks"][number]) {
+function formatProjectTask(task: ProjectWorkspaceRecord["tasks"][number]): ProjectWorkspaceTask {
   return {
     ...task,
     statusLabel: getTaskStatusLabel(task.status),
     priorityLabel: getTaskPriorityLabel(task.priority),
     dueLabel: formatTaskDueLabel(task.dueAt),
   };
+}
+
+function buildProjectSectionGroups({
+  taskSections,
+  tasks,
+}: {
+  taskSections: ProjectWorkspaceRecord["taskSections"];
+  tasks: ProjectWorkspaceTask[];
+}) {
+  const groups = taskSections.map((section) => ({
+    id: section.id,
+    name: section.name,
+    tasks: tasks.filter((task) => task.section?.id === section.id),
+  }));
+  const unsectionedTasks = tasks.filter((task) => !task.section);
+
+  if (unsectionedTasks.length > 0 || groups.length === 0) {
+    groups.push({
+      id: "unsectioned",
+      name: "Unsectioned",
+      tasks: unsectionedTasks,
+    });
+  }
+
+  return groups;
 }
 
 export async function listProjects(ownerId: string) {
@@ -273,10 +339,16 @@ export async function getProjectWorkspaceBySlug(slug: string, ownerId: string) {
     return null;
   }
 
+  const formattedTasks = workspace.tasks.map(formatProjectTask);
+
   return {
     ...workspace,
     documents: sortProjectDocuments(workspace.documents),
-    tasks: workspace.tasks.map(formatProjectTask),
+    tasks: formattedTasks,
+    sectionGroups: buildProjectSectionGroups({
+      taskSections: workspace.taskSections,
+      tasks: formattedTasks,
+    }),
   };
 }
 

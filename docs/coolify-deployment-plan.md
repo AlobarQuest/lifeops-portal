@@ -93,6 +93,7 @@ Notes:
 - The only system still building the image should be GitHub Actions or another external builder.
 - `INTERNAL_API_TOKEN` is required before other internal applications can call the task API as machine clients.
 - The first-caller rollout and token cutover process are documented in `docs/task-api-first-caller-runbook.md`.
+- Production bearer-token smoke was verified successfully on 2026-03-13.
 - If GHCR remains private, Coolify must have working registry credentials before rollout. Public repository visibility alone does not make the container package public.
 
 ## Database Plan

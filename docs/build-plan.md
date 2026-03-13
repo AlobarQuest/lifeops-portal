@@ -10,6 +10,12 @@
 
 ## Build-Start Decisions
 
+Current status on 2026-03-13:
+
+- phases 0 through 3 are largely in place for the task platform
+- production bearer-token access is live and smoke-tested
+- the biggest remaining product work is phase 4 and the placeholder MVP sections outside tasks/projects
+
 ### 1. Application Shape
 
 Start with one full-stack web application, not a distributed system. The MVP is mostly CRUD, search, dashboards, and linked context. A single app keeps deployment, debugging, and schema iteration fast.

@@ -42,11 +42,14 @@ export async function POST(request: NextRequest, context: TaskRouteContext) {
 
   const taskId = await resolveTaskId(context.params);
 
-  let task;
+  let result: {
+    task: Awaited<ReturnType<typeof getTaskById>>;
+    nextTask: Awaited<ReturnType<typeof getTaskById>> | null;
+  };
 
   try {
-    task = await prisma.$transaction(async (tx) => {
-      await setTaskCompletion(taskId, currentUser.id, true, tx);
+    result = await prisma.$transaction(async (tx) => {
+      const completionResult = await setTaskCompletion(taskId, currentUser.id, true, tx);
       const updatedTask = await getTaskById(taskId, currentUser.id, {
         includeArchived: true,
         db: tx,
@@ -62,19 +65,37 @@ export async function POST(request: NextRequest, context: TaskRouteContext) {
         db: tx,
         ownerId: currentUser.id,
         request,
+        requestBody:
+          completionResult.nextTask?.sourceType && completionResult.nextTask?.sourceKey
+            ? {
+                sourceType: completionResult.nextTask.sourceType,
+                sourceKey: completionResult.nextTask.sourceKey,
+              }
+            : undefined,
         task: updatedTask,
       });
 
-      return updatedTask;
+      const nextTask = completionResult.nextTask
+        ? await getTaskById(completionResult.nextTask.id, currentUser.id, {
+            includeArchived: true,
+            db: tx,
+          })
+        : null;
+
+      return {
+        task: updatedTask,
+        nextTask,
+      };
     });
-  } catch {
+  } catch (error) {
     return NextResponse.json(
-      { error: "Task not found." },
-      { status: 404 },
+      { error: error instanceof Error ? error.message : "Task not found." },
+      { status: error instanceof Error && error.message !== "Task not found." ? 400 : 404 },
     );
   }
 
   return NextResponse.json({
-    task: task ? serializeTask(task) : { id: taskId },
+    task: result.task ? serializeTask(result.task) : { id: taskId },
+    nextTask: result.nextTask ? serializeTask(result.nextTask) : null,
   });
 }

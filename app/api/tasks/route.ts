@@ -100,8 +100,13 @@ export async function GET(request: NextRequest) {
   const parsed = taskListFilterSchema.safeParse({
     view: readSearchParam(request, ["view"]),
     status: readSearchParam(request, ["status"]),
+    recurrenceRule: readSearchParam(request, ["recurrenceRule", "recurrence_rule"]),
+    recurring: readSearchParam(request, ["recurring"]),
     projectId: readSearchParam(request, ["projectId", "project_id"]),
     sectionId: readSearchParam(request, ["sectionId", "section_id"]),
+    parentTaskId: readSearchParam(request, ["parentTaskId", "parent_task_id"]),
+    label: readSearchParam(request, ["label"]),
+    labelId: readSearchParam(request, ["labelId", "label_id"]),
     sourceType: readSearchParam(request, ["sourceType", "source_type", "externalSource", "external_source"]),
     sourceKey: readSearchParam(request, ["sourceKey", "source_key", "externalKey", "external_key"]),
     includeArchived: readSearchParam(request, ["includeArchived", "include_archived"]),
@@ -143,9 +148,16 @@ export async function POST(request: NextRequest) {
     description: readBodyValue(body, ["description"]),
     priority: readBodyValue(body, ["priority"]),
     status: readBodyValue(body, ["status"]) ?? TaskStatus.INBOX,
+    scheduledFor: readBodyValue(body, ["scheduledFor", "scheduled_for"]),
     dueOn: readBodyValue(body, ["dueOn", "due_on"]),
+    deadlineOn: readBodyValue(body, ["deadlineOn", "deadline_on"]),
+    durationMinutes: readBodyValue(body, ["durationMinutes", "duration_minutes"]),
+    recurrenceRule: readBodyValue(body, ["recurrenceRule", "recurrence_rule"]),
+    sortOrder: readBodyValue(body, ["sortOrder", "sort_order"]),
     projectId: readBodyValue(body, ["projectId", "project_id"]),
     sectionId: readBodyValue(body, ["sectionId", "section_id"]),
+    parentTaskId: readBodyValue(body, ["parentTaskId", "parent_task_id"]),
+    labels: readBodyValue(body, ["labels", "labelNames", "label_names"]),
     ...normalizeTaskSourceReference(body),
   });
 
@@ -226,7 +238,7 @@ export async function PATCH(request: NextRequest) {
 
   const targetTask =
     taskId.length > 0
-      ? await getTaskById(taskId, currentUser.id)
+      ? await getTaskById(taskId, currentUser.id, { includeArchived: true })
       : sourceReference.data.sourceType && sourceReference.data.sourceKey
         ? await getTaskBySource({
             ownerId: currentUser.id,
@@ -253,11 +265,14 @@ export async function PATCH(request: NextRequest) {
   const mode = String(readBodyValue(body, ["mode"]) ?? "").trim();
 
   if (mode === "complete" || mode === "reopen") {
-    let task;
+    let result: {
+      task: Awaited<ReturnType<typeof getTaskById>>;
+      nextTask: Awaited<ReturnType<typeof getTaskById>> | null;
+    };
 
     try {
-      task = await prisma.$transaction(async (tx) => {
-        await setTaskCompletion(targetTask.id, currentUser.id, mode === "complete", tx);
+      result = await prisma.$transaction(async (tx) => {
+        const completionResult = await setTaskCompletion(targetTask.id, currentUser.id, mode === "complete", tx);
         const updatedTask = await getTaskById(targetTask.id, currentUser.id, {
           includeArchived: true,
           db: tx,
@@ -273,21 +288,39 @@ export async function PATCH(request: NextRequest) {
           db: tx,
           ownerId: currentUser.id,
           request,
-          requestBody: body,
+          requestBody:
+            mode === "complete" && targetTask.sourceType && targetTask.sourceKey
+              ? {
+                  ...(body ?? {}),
+                  sourceType: targetTask.sourceType,
+                  sourceKey: targetTask.sourceKey,
+                }
+              : body,
           task: updatedTask,
         });
 
-        return updatedTask;
+        const nextTask = completionResult.nextTask
+          ? await getTaskById(completionResult.nextTask.id, currentUser.id, {
+              includeArchived: true,
+              db: tx,
+            })
+          : null;
+
+        return {
+          task: updatedTask,
+          nextTask,
+        };
       });
-    } catch {
+    } catch (error) {
       return NextResponse.json(
-        { error: "Task not found." },
-        { status: 404 },
+        { error: error instanceof Error ? error.message : "Task not found." },
+        { status: error instanceof Error && error.message !== "Task not found." ? 400 : 404 },
       );
     }
 
     return NextResponse.json({
-      task: task ? serializeTask(task) : { id: targetTask.id },
+      task: result.task ? serializeTask(result.task) : { id: targetTask.id },
+      nextTask: result.nextTask ? serializeTask(result.nextTask) : null,
     });
   }
 
@@ -296,9 +329,16 @@ export async function PATCH(request: NextRequest) {
     description: readBodyValue(body, ["description"]),
     priority: readBodyValue(body, ["priority"]),
     status: readBodyValue(body, ["status"]),
+    scheduledFor: readBodyValue(body, ["scheduledFor", "scheduled_for"]),
     dueOn: readBodyValue(body, ["dueOn", "due_on"]),
+    deadlineOn: readBodyValue(body, ["deadlineOn", "deadline_on"]),
+    durationMinutes: readBodyValue(body, ["durationMinutes", "duration_minutes"]),
+    recurrenceRule: readBodyValue(body, ["recurrenceRule", "recurrence_rule"]),
+    sortOrder: readBodyValue(body, ["sortOrder", "sort_order"]),
     projectId: readBodyValue(body, ["projectId", "project_id"]),
     sectionId: readBodyValue(body, ["sectionId", "section_id"]),
+    parentTaskId: readBodyValue(body, ["parentTaskId", "parent_task_id"]),
+    labels: readBodyValue(body, ["labels", "labelNames", "label_names"]),
     blockedReason: readBodyValue(body, ["blockedReason", "blocked_reason"]),
   });
 

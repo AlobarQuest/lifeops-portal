@@ -203,11 +203,18 @@ export default async function ProjectDetailPage({
                     {group.tasks.map((task) => (
                       <div className="list-item" key={task.id}>
                         <strong>{task.title}</strong>
+                        {task.parentTask ? <p>Subtask of: {task.parentTask.title}</p> : null}
                         {task.blockedReason ? <p>Blocked by: {task.blockedReason}</p> : null}
                         <div className="meta-row">
                           <span className="pill">{task.statusLabel}</span>
                           <span className="pill">{task.priorityLabel}</span>
                           <span className="pill">{task.dueLabel}</span>
+                          {task.parentTaskId ? <span className="pill">Subtask</span> : null}
+                          {task.tags.map((taskTag) => (
+                            <span className="pill" key={taskTag.tag.id}>
+                              #{taskTag.tag.name}
+                            </span>
+                          ))}
                         </div>
                       </div>
                     ))}

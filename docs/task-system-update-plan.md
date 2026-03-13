@@ -44,13 +44,28 @@ Current implementation state on 2026-03-13:
 
 - task API writes now create `TaskAuditEvent` rows with auth type, request path, request payload, and post-write task snapshot data
 - integration tests now assert the audit event sequence for the main task write flows
+- task records now support parent-task nesting through `parentTaskId`
+- task records now support labels through the existing `Tag` / `TaskTag` join model
+- `/api/tasks` and `/api/tasks/:id` now accept `parentTaskId` and `labels`, and `GET /api/tasks` can filter by `parentTaskId`, `label`, or `labelId`
+- `/api/task-labels` now provides owner-scoped label lookup for machine callers
+- `/tasks` now renders nested subtasks, label pills, label editing, and inline subtask creation
+- project task boards now expose task labels and parent-task context
+- integration tests now cover label filters, task-label lookup, and subtask inheritance through the live route handlers
+- task records now support `scheduledFor`, `deadlineAt`, `durationMinutes`, and enum-based recurrence rules
+- recurring task completion now creates the next occurrence, shifts source-aware lookup to the active recurrence, and blocks reopen once the next task exists
+- `/api/tasks` now accepts recurrence and richer scheduling fields, and recurring filters can query active repeating tasks
+- integration tests now cover recurrence generation and scheduling-field round trips through the live route handlers
+- task records now support dedicated comments through `TaskComment`
+- `/api/tasks/:id/comments` now supports owner-scoped comment list and create flows
+- `/tasks` now uses a right-side detail drawer for full-task editing without losing list context
+- task lists now support manual sibling ordering through `sortOrder`, including move up/down controls in the drawer
+- integration tests now cover task comments and explicit subtask ordering through the live route handlers
 
 What is still missing before broad app-to-app use:
 
-- a richer task model with parent tasks, labels, and recurrence
 - richer external-ref history beyond the single source pair
-- a fuller task detail or drawer UX beyond the current inline editor
 - clearer API compatibility and versioning rules for external callers
+- natural-language date parsing
 
 ## Todoist Benchmark Findings
 
@@ -307,7 +322,7 @@ The task section should move from a static list to a real operator surface:
 Recommended first UI sequence:
 
 1. `/tasks` list with real filters and quick add
-2. task detail drawer
+2. task detail drawer with comments and manual ordering
 3. project task grouping by section
 4. inbox and today saved views
 
@@ -381,14 +396,13 @@ Exit criteria:
 
 Status:
 
-- Items 2 through 5 now have a first real implementation.
-- Item 1 still needs production rollout and explicit operational documentation.
+- Items 1 through 5 now have a first real implementation.
+- Production bearer-token smoke passed against `https://portal.devonwatkins.com` on 2026-03-13.
 
 ## Open Decisions
 
 - Should `project_id` remain nullable for inbox tasks, or should inbox be its own system project?
 - Should recurring logic be stored as a simple rule string first, or as a more structured recurrence model?
-- Should comments ship in the first pass, or can task notes cover the initial need?
 - Should section order be manual only, or should tasks also support priority-first smart sorting?
 
 ## Source Notes

@@ -88,9 +88,16 @@ export async function PATCH(request: NextRequest, context: TaskRouteContext) {
     description: readBodyValue(body, ["description"]),
     priority: readBodyValue(body, ["priority"]),
     status: readBodyValue(body, ["status"]),
+    scheduledFor: readBodyValue(body, ["scheduledFor", "scheduled_for"]),
     dueOn: readBodyValue(body, ["dueOn", "due_on"]),
+    deadlineOn: readBodyValue(body, ["deadlineOn", "deadline_on"]),
+    durationMinutes: readBodyValue(body, ["durationMinutes", "duration_minutes"]),
+    recurrenceRule: readBodyValue(body, ["recurrenceRule", "recurrence_rule"]),
+    sortOrder: readBodyValue(body, ["sortOrder", "sort_order"]),
     projectId: readBodyValue(body, ["projectId", "project_id"]),
     sectionId: readBodyValue(body, ["sectionId", "section_id"]),
+    parentTaskId: readBodyValue(body, ["parentTaskId", "parent_task_id"]),
+    labels: readBodyValue(body, ["labels", "labelNames", "label_names"]),
     blockedReason: readBodyValue(body, ["blockedReason", "blocked_reason"]),
   });
 

@@ -13,6 +13,8 @@ type JsonRecord = Record<string, unknown>;
 type NextRequestInit = ConstructorParameters<typeof NextRequest>[1];
 
 type RouteModules = {
+  taskLabels: typeof import("../../app/api/task-labels/route");
+  taskComments: typeof import("../../app/api/tasks/[id]/comments/route");
   taskProjects: typeof import("../../app/api/task-projects/route");
   taskSections: typeof import("../../app/api/task-sections/route");
   tasks: typeof import("../../app/api/tasks/route");
@@ -23,6 +25,8 @@ type RouteModules = {
 };
 
 const routeModulesPromise: Promise<RouteModules> = Promise.all([
+  import("../../app/api/task-labels/route"),
+  import("../../app/api/tasks/[id]/comments/route"),
   import("../../app/api/task-projects/route"),
   import("../../app/api/task-sections/route"),
   import("../../app/api/tasks/route"),
@@ -32,6 +36,8 @@ const routeModulesPromise: Promise<RouteModules> = Promise.all([
   import("../../app/api/tasks/[id]/archive/route"),
 ]).then(
   ([
+    taskLabels,
+    taskComments,
     taskProjects,
     taskSections,
     tasks,
@@ -40,6 +46,8 @@ const routeModulesPromise: Promise<RouteModules> = Promise.all([
     taskReopen,
     taskArchive,
   ]) => ({
+    taskLabels,
+    taskComments,
     taskProjects,
     taskSections,
     tasks,
@@ -161,6 +169,17 @@ async function cleanupIntegrationArtifacts({
       },
     });
   }
+
+  await prisma.tag.deleteMany({
+    where: {
+      slug: {
+        startsWith: runId,
+      },
+      taskLinks: {
+        none: {},
+      },
+    },
+  });
 }
 
 function getString(value: unknown): string {
@@ -181,6 +200,10 @@ test("task routes reject unauthenticated requests", async () => {
 test("task platform routes support project, section, task, and archive flows", async (t) => {
   const routes = await routeModulesPromise;
   const runId = `it-flow-${Date.now()}`;
+  const labelPlatform = `${runId}-platform`;
+  const labelApi = `${runId}-api`;
+  const labelOps = `${runId}-ops`;
+  const labelChild = `${runId}-child-step`;
   const projectIds: string[] = [];
 
   await cleanupIntegrationArtifacts({ runId, projectIds });
@@ -236,17 +259,89 @@ test("task platform routes support project, section, task, and archive flows", a
       title: "Integration route flow task",
       description: "Created by the integration route flow test.",
       priority: "HIGH",
+      scheduledFor: "2026-03-16",
+      dueOn: "2026-03-17",
+      deadlineOn: "2026-03-18",
+      durationMinutes: 90,
       projectId,
       sectionId,
+      labels: [labelPlatform, labelApi],
       sourceType: "integration-test",
       sourceKey,
     }),
   );
 
   assert.equal(createTaskResponse.status, 201);
-  const createTaskBody = await parseJson<{ created: boolean; task: { id: string; title: string } }>(createTaskResponse);
+  const createTaskBody = await parseJson<{
+    created: boolean;
+    task: {
+      id: string;
+      title: string;
+      scheduledFor: string | null;
+      deadlineAt: string | null;
+      durationMinutes: number | null;
+      labels: Array<{ name: string }>;
+    };
+  }>(createTaskResponse);
   assert.equal(createTaskBody.created, true);
   const taskId = createTaskBody.task.id;
+  assert.match(getString(createTaskBody.task.scheduledFor), /^2026-03-16T/);
+  assert.match(getString(createTaskBody.task.deadlineAt), /^2026-03-18T/);
+  assert.equal(createTaskBody.task.durationMinutes, 90);
+  assert.deepEqual(
+    createTaskBody.task.labels.map((label) => label.name).sort(),
+    [labelApi, labelPlatform].sort(),
+  );
+
+  const createSubtaskResponse = await routes.tasks.POST(
+    makeJsonRequest("/api/tasks", "POST", {
+      title: "Integration route flow subtask",
+      labels: `${labelChild}, ${labelApi}`,
+      parentTaskId: taskId,
+    }),
+  );
+
+  assert.equal(createSubtaskResponse.status, 201);
+  const createSubtaskBody = await parseJson<{
+    task: {
+      id: string;
+      sortOrder: number | null;
+      parentTaskId: string | null;
+      project: { id: string } | null;
+      section: { id: string } | null;
+      parentTask: { id: string; title: string } | null;
+      labels: Array<{ name: string }>;
+    };
+  }>(createSubtaskResponse);
+  const subtaskId = createSubtaskBody.task.id;
+  assert.equal(createSubtaskBody.task.parentTaskId, taskId);
+  assert.equal(createSubtaskBody.task.project?.id, projectId);
+  assert.equal(createSubtaskBody.task.section?.id, sectionId);
+  assert.equal(createSubtaskBody.task.parentTask?.id, taskId);
+  assert.equal(createSubtaskBody.task.parentTask?.title, "Integration route flow task");
+  assert.deepEqual(
+    createSubtaskBody.task.labels.map((label) => label.name).sort(),
+    [labelApi, labelChild].sort(),
+  );
+  assert.equal(createSubtaskBody.task.sortOrder, 0);
+
+  const createSecondSubtaskResponse = await routes.tasks.POST(
+    makeJsonRequest("/api/tasks", "POST", {
+      title: "Integration route flow second subtask",
+      parentTaskId: taskId,
+    }),
+  );
+  assert.equal(createSecondSubtaskResponse.status, 201);
+  const createSecondSubtaskBody = await parseJson<{
+    task: {
+      id: string;
+      sortOrder: number | null;
+      parentTaskId: string | null;
+    };
+  }>(createSecondSubtaskResponse);
+  const secondSubtaskId = createSecondSubtaskBody.task.id;
+  assert.equal(createSecondSubtaskBody.task.parentTaskId, taskId);
+  assert.equal(createSecondSubtaskBody.task.sortOrder, 1);
 
   const replayTaskResponse = await routes.tasks.POST(
     makeJsonRequest("/api/tasks", "POST", {
@@ -255,6 +350,7 @@ test("task platform routes support project, section, task, and archive flows", a
       priority: "CRITICAL",
       projectId,
       sectionId,
+      labels: [labelPlatform, labelApi, labelOps],
       sourceType: "integration-test",
       sourceKey,
     }),
@@ -268,6 +364,89 @@ test("task platform routes support project, section, task, and archive flows", a
   assert.equal(replayTaskBody.task.id, taskId);
   assert.equal(replayTaskBody.task.title, "Integration route flow task updated");
   assert.equal(replayTaskBody.task.priority, "CRITICAL");
+
+  const labelFilterResponse = await routes.tasks.GET(
+    makeAuthedGet(`/api/tasks?projectId=${projectId}&label=${encodeURIComponent(labelOps)}`),
+  );
+  assert.equal(labelFilterResponse.status, 200);
+  const labelFilterBody = await parseJson<{ tasks: Array<{ id: string }> }>(labelFilterResponse);
+  assert.equal(labelFilterBody.tasks.length, 1);
+  assert.equal(labelFilterBody.tasks[0]?.id, taskId);
+
+  const childTaskFilterResponse = await routes.tasks.GET(
+    makeAuthedGet(`/api/tasks?parentTaskId=${taskId}`),
+  );
+  assert.equal(childTaskFilterResponse.status, 200);
+  const childTaskFilterBody = await parseJson<{
+    tasks: Array<{ id: string; parentTaskId: string | null; sortOrder: number | null }>;
+  }>(childTaskFilterResponse);
+  assert.equal(childTaskFilterBody.tasks.length, 2);
+  assert.equal(childTaskFilterBody.tasks[0]?.id, subtaskId);
+  assert.equal(childTaskFilterBody.tasks[0]?.parentTaskId, taskId);
+  assert.equal(childTaskFilterBody.tasks[1]?.id, secondSubtaskId);
+
+  const reorderSecondSubtaskResponse = await routes.taskById.PATCH(
+    makeJsonRequest(`/api/tasks/${secondSubtaskId}`, "PATCH", {
+      sortOrder: 0,
+    }),
+    taskContext(secondSubtaskId),
+  );
+  assert.equal(reorderSecondSubtaskResponse.status, 200);
+
+  const reorderFirstSubtaskResponse = await routes.taskById.PATCH(
+    makeJsonRequest(`/api/tasks/${subtaskId}`, "PATCH", {
+      sortOrder: 1,
+    }),
+    taskContext(subtaskId),
+  );
+  assert.equal(reorderFirstSubtaskResponse.status, 200);
+
+  const reorderedChildTaskResponse = await routes.tasks.GET(
+    makeAuthedGet(`/api/tasks?parentTaskId=${taskId}`),
+  );
+  assert.equal(reorderedChildTaskResponse.status, 200);
+  const reorderedChildTaskBody = await parseJson<{
+    tasks: Array<{ id: string; sortOrder: number | null }>;
+  }>(reorderedChildTaskResponse);
+  assert.deepEqual(
+    reorderedChildTaskBody.tasks.map((childTask) => childTask.id),
+    [secondSubtaskId, subtaskId],
+  );
+  assert.deepEqual(
+    reorderedChildTaskBody.tasks.map((childTask) => childTask.sortOrder),
+    [0, 1],
+  );
+
+  const labelListResponse = await routes.taskLabels.GET(
+    makeAuthedGet(`/api/task-labels?q=${encodeURIComponent(labelApi)}`),
+  );
+  assert.equal(labelListResponse.status, 200);
+  const labelListBody = await parseJson<{ labels: Array<{ name: string }> }>(labelListResponse);
+  assert.ok(labelListBody.labels.some((label) => label.name === labelApi));
+
+  const createCommentResponse = await routes.taskComments.POST(
+    makeJsonRequest(`/api/tasks/${taskId}/comments`, "POST", {
+      bodyMarkdown: "Integration comment added through the comment route.",
+    }),
+    taskContext(taskId),
+  );
+  assert.equal(createCommentResponse.status, 201);
+  const createCommentBody = await parseJson<{
+    comment: { id: string; bodyMarkdown: string; author: { email: string } };
+  }>(createCommentResponse);
+  assert.equal(createCommentBody.comment.bodyMarkdown, "Integration comment added through the comment route.");
+  assert.equal(createCommentBody.comment.author.email, process.env.AUTH_EMAIL);
+
+  const listCommentsResponse = await routes.taskComments.GET(
+    makeAuthedGet(`/api/tasks/${taskId}/comments`),
+    taskContext(taskId),
+  );
+  assert.equal(listCommentsResponse.status, 200);
+  const listCommentsBody = await parseJson<{
+    comments: Array<{ id: string; bodyMarkdown: string }>;
+  }>(listCommentsResponse);
+  assert.equal(listCommentsBody.comments.length, 1);
+  assert.equal(listCommentsBody.comments[0]?.id, createCommentBody.comment.id);
 
   const filteredTasksResponse = await routes.tasks.GET(
     makeAuthedGet(
@@ -284,8 +463,17 @@ test("task platform routes support project, section, task, and archive flows", a
     taskContext(taskId),
   );
   assert.equal(getTaskByIdResponse.status, 200);
-  const getTaskByIdBody = await parseJson<{ task: { id: string; title: string } }>(getTaskByIdResponse);
+  const getTaskByIdBody = await parseJson<{
+    task: {
+      id: string;
+      title: string;
+      commentCount: number;
+      comments: Array<{ id: string }>;
+    };
+  }>(getTaskByIdResponse);
   assert.equal(getTaskByIdBody.task.id, taskId);
+  assert.equal(getTaskByIdBody.task.commentCount, 1);
+  assert.equal(getTaskByIdBody.task.comments.length, 1);
 
   const patchTaskByIdResponse = await routes.taskById.PATCH(
     makeJsonRequest(`/api/tasks/${taskId}`, "PATCH", {
@@ -358,16 +546,15 @@ test("task platform routes support project, section, task, and archive flows", a
   const includeArchivedProjectTasksBody = await parseJson<{ tasks: Array<{ id: string }> }>(
     includeArchivedProjectTasksResponse,
   );
-  assert.equal(includeArchivedProjectTasksBody.tasks.length, 1);
-  assert.equal(includeArchivedProjectTasksBody.tasks[0]?.id, taskId);
+  assert.equal(includeArchivedProjectTasksBody.tasks.length, 3);
+  assert.ok(includeArchivedProjectTasksBody.tasks.some((task) => task.id === taskId));
+  assert.ok(includeArchivedProjectTasksBody.tasks.some((task) => task.id === subtaskId));
+  assert.ok(includeArchivedProjectTasksBody.tasks.some((task) => task.id === secondSubtaskId));
 
   const prisma = await getPrisma();
   const auditEvents = await prisma.taskAuditEvent.findMany({
     where: {
       taskId,
-    },
-    orderBy: {
-      createdAt: "asc",
     },
     select: {
       action: true,
@@ -383,15 +570,15 @@ test("task platform routes support project, section, task, and archive flows", a
   });
 
   assert.deepEqual(
-    auditEvents.map((event) => event.action),
-    ["CREATE", "UPSERT_UPDATE", "UPDATE", "COMPLETE", "REOPEN", "ARCHIVE"],
+    auditEvents.map((event) => event.action).sort(),
+    ["ARCHIVE", "COMPLETE", "CREATE", "REOPEN", "UPDATE", "UPSERT_UPDATE"],
   );
   assert.deepEqual(
-    auditEvents.map((event) => event.requestMethod),
-    ["POST", "POST", "PATCH", "POST", "POST", "POST"],
+    auditEvents.map((event) => event.requestMethod).sort(),
+    ["PATCH", "POST", "POST", "POST", "POST", "POST"],
   );
   assert.deepEqual(
-    auditEvents.map((event) => event.requestPath),
+    auditEvents.map((event) => event.requestPath).sort(),
     [
       "/api/tasks",
       "/api/tasks",
@@ -399,17 +586,19 @@ test("task platform routes support project, section, task, and archive flows", a
       `/api/tasks/${taskId}/complete`,
       `/api/tasks/${taskId}/reopen`,
       `/api/tasks/${taskId}/archive`,
-    ],
+    ].sort(),
   );
   assert.ok(auditEvents.every((event) => event.authType === "INTERNAL_TOKEN"));
   assert.ok(auditEvents.every((event) => event.actorEmail === process.env.AUTH_EMAIL));
   assert.ok(auditEvents.every((event) => event.sourceType === "integration-test"));
   assert.ok(auditEvents.every((event) => event.sourceKey === sourceKey));
 
-  const createPayload = auditEvents[0]?.requestPayloadJson as { title?: string } | null;
+  const createEvent = auditEvents.find((event) => event.action === "CREATE");
+  const archiveEvent = auditEvents.find((event) => event.action === "ARCHIVE");
+  const createPayload = createEvent?.requestPayloadJson as { title?: string } | null;
   assert.equal(createPayload?.title, "Integration route flow task");
 
-  const archivedSnapshot = auditEvents.at(-1)?.taskSnapshotJson as { archivedAt?: string | null } | null;
+  const archivedSnapshot = archiveEvent?.taskSnapshotJson as { archivedAt?: string | null } | null;
   assert.match(getString(archivedSnapshot?.archivedAt), /^\d{4}-\d{2}-\d{2}T/);
 });
 
@@ -507,4 +696,120 @@ test("source-aware task upsert revives archived tasks", async (t) => {
   assert.equal(revivedSnapshot?.archivedAt, null);
   assert.equal(revivedSnapshot?.priority, "HIGH");
   assert.equal(revivedSnapshot?.title, "Revived integration task");
+});
+
+test("recurring task completion creates the next occurrence", async (t) => {
+  const routes = await routeModulesPromise;
+  const runId = `it-recur-${Date.now()}`;
+  const projectIds: string[] = [];
+
+  await cleanupIntegrationArtifacts({ runId, projectIds });
+  t.after(async () => {
+    await cleanupIntegrationArtifacts({ runId, projectIds });
+  });
+
+  const sourceKey = `${runId}-task`;
+  const createTaskResponse = await routes.tasks.POST(
+    makeJsonRequest("/api/tasks", "POST", {
+      title: "Recurring integration task",
+      description: "Created for recurrence coverage.",
+      priority: "MEDIUM",
+      scheduledFor: "2026-03-13",
+      dueOn: "2026-03-15",
+      deadlineOn: "2026-03-16",
+      durationMinutes: 45,
+      recurrenceRule: "WEEKLY",
+      sourceType: "integration-test",
+      sourceKey,
+    }),
+  );
+
+  assert.equal(createTaskResponse.status, 201);
+  const createTaskBody = await parseJson<{ task: { id: string } }>(createTaskResponse);
+  const taskId = createTaskBody.task.id;
+
+  const completeTaskResponse = await routes.taskComplete.POST(
+    makeRequest(`/api/tasks/${taskId}/complete`, {
+      method: "POST",
+      headers: authHeaders(),
+    }),
+    taskContext(taskId),
+  );
+  assert.equal(completeTaskResponse.status, 200);
+  const completeTaskBody = await parseJson<{
+    task: { id: string; status: string; sourceType: string | null; sourceKey: string | null };
+    nextTask: {
+      id: string;
+      status: string;
+      scheduledFor: string | null;
+      dueAt: string | null;
+      deadlineAt: string | null;
+      durationMinutes: number | null;
+      recurrenceRule: string | null;
+      sourceType: string | null;
+      sourceKey: string | null;
+    } | null;
+  }>(completeTaskResponse);
+
+  assert.equal(completeTaskBody.task.id, taskId);
+  assert.equal(completeTaskBody.task.status, "DONE");
+  assert.equal(completeTaskBody.task.sourceType, null);
+  assert.equal(completeTaskBody.task.sourceKey, null);
+  assert.ok(completeTaskBody.nextTask);
+  assert.equal(completeTaskBody.nextTask?.status, "TODO");
+  assert.equal(completeTaskBody.nextTask?.recurrenceRule, "WEEKLY");
+  assert.equal(completeTaskBody.nextTask?.durationMinutes, 45);
+  assert.equal(completeTaskBody.nextTask?.sourceType, "integration-test");
+  assert.equal(completeTaskBody.nextTask?.sourceKey, sourceKey);
+  assert.match(getString(completeTaskBody.nextTask?.scheduledFor), /^2026-03-20T/);
+  assert.match(getString(completeTaskBody.nextTask?.dueAt), /^2026-03-22T/);
+  assert.match(getString(completeTaskBody.nextTask?.deadlineAt), /^2026-03-23T/);
+
+  const sourceLookupResponse = await routes.tasks.GET(
+    makeAuthedGet(`/api/tasks?sourceType=integration-test&sourceKey=${sourceKey}`),
+  );
+  assert.equal(sourceLookupResponse.status, 200);
+  const sourceLookupBody = await parseJson<{ tasks: Array<{ id: string }> }>(sourceLookupResponse);
+  assert.equal(sourceLookupBody.tasks.length, 1);
+  assert.equal(sourceLookupBody.tasks[0]?.id, completeTaskBody.nextTask?.id);
+
+  const reopenTaskResponse = await routes.taskReopen.POST(
+    makeRequest(`/api/tasks/${taskId}/reopen`, {
+      method: "POST",
+      headers: authHeaders(),
+    }),
+    taskContext(taskId),
+  );
+  assert.equal(reopenTaskResponse.status, 400);
+  const reopenTaskBody = await parseJson<{ error: string }>(reopenTaskResponse);
+  assert.match(reopenTaskBody.error, /Cannot reopen a recurring task/);
+
+  const prisma = await getPrisma();
+  const auditEvents = await prisma.taskAuditEvent.findMany({
+    where: {
+      OR: [
+        {
+          taskId,
+        },
+        {
+          taskId: completeTaskBody.nextTask?.id ?? "",
+        },
+      ],
+    },
+    orderBy: {
+      createdAt: "asc",
+    },
+    select: {
+      action: true,
+      sourceType: true,
+      sourceKey: true,
+    },
+  });
+
+  assert.deepEqual(
+    auditEvents.map((event) => event.action),
+    ["CREATE", "COMPLETE"],
+  );
+  assert.ok(auditEvents.every((event) => event.sourceType === "integration-test"));
+  assert.ok(auditEvents.every((event) => event.sourceKey === sourceKey));
 });

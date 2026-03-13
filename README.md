@@ -18,11 +18,15 @@ This repository now contains the initial application scaffold for `LifeOpsPortal
 - `GET /api/tasks` now accepts `includeArchived`, and explicit source lookups can return completed or archived tasks without disappearing behind the default active-task view
 - `/api/tasks/[id]`, `/api/tasks/[id]/complete`, `/api/tasks/[id]/reopen`, and `/api/tasks/[id]/archive` now provide path-based task reads and state transitions for external callers
 - task API writes now create `TaskAuditEvent` rows with auth method, request metadata, payload, and task snapshot context
-- `/tasks` now supports browser-side inline task editing, project/section reassignment, and archive controls
+- `/tasks` now supports a task detail drawer with full-task editing, manual move up/down ordering, comments, nested subtask creation, project/section reassignment, and archive controls
+- tasks now support `scheduledFor`, `deadlineAt`, `durationMinutes`, and recurring cadence metadata
+- recurring task completion now generates the next occurrence and keeps source-aware lookups pointed at the active recurrence
 - `/api/task-projects` now supports project lookup, creation, and update for machine callers that need real project IDs before writing tasks
 - `/api/task-sections` now supports section lookup, creation, and update for project-scoped task organization
+- `/api/task-labels` now supports owner-scoped label lookup for clients that need existing task labels
+- `/api/tasks/[id]/comments` now supports owner-scoped comment list and create flows for browser and token-authenticated callers
 - external applications are intended to use LifeOps Portal as the shared task layer instead of Todoist
-- machine-to-machine task access uses `INTERNAL_API_TOKEN`, while parent tasks, labels, recurrence, and deeper auditability still remain to be built
+- machine-to-machine task access uses `INTERNAL_API_TOKEN`; richer external-ref history, saved filters, and broader UX polish still remain to be built
 
 ## Project Layout
 

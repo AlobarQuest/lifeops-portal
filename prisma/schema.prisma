@@ -25,6 +25,13 @@ enum TaskStatus {
   CANCELED
 }
 
+enum TaskRecurrenceRule {
+  DAILY
+  WEEKDAYS
+  WEEKLY
+  MONTHLY
+}
+
 enum TaskAuditAction {
   CREATE
   UPSERT_UPDATE
@@ -116,6 +123,7 @@ model User {
   updatedAt         DateTime           @updatedAt
   projects          Project[]
   tasks             Task[]
+  taskComments      TaskComment[]
   taskAuditEvents   TaskAuditEvent[]
   knowledgeItems    KnowledgeItem[]
   decisions         Decision[]
@@ -199,6 +207,8 @@ model TaskSection {
 
 model Task {
   id             String              @id @default(cuid())
+  parentTaskId   String?
+  recurrencePreviousTaskId String?
   projectId      String?
   sectionId      String?
   roleId         String?
@@ -209,30 +219,57 @@ model Task {
   sourceKey      String?
   status         TaskStatus          @default(INBOX)
   priority       PriorityLevel       @default(MEDIUM)
+  scheduledFor   DateTime?
   dueAt          DateTime?
+  deadlineAt     DateTime?
+  durationMinutes Int?
+  recurrenceRule TaskRecurrenceRule?
   completedAt    DateTime?
   archivedAt     DateTime?
   blockedReason  String?
   sortOrder      Int?
   createdAt      DateTime            @default(now())
   updatedAt      DateTime            @updatedAt
+  parentTask     Task?               @relation("TaskSubtasks", fields: [parentTaskId], references: [id], onDelete: SetNull)
+  subtasks       Task[]              @relation("TaskSubtasks")
+  recurrencePreviousTask Task?       @relation("TaskRecurrenceChain", fields: [recurrencePreviousTaskId], references: [id], onDelete: SetNull)
+  recurrenceNextTasks Task[]         @relation("TaskRecurrenceChain")
   project        Project?            @relation(fields: [projectId], references: [id])
   section        TaskSection?        @relation(fields: [sectionId], references: [id], onDelete: SetNull)
   role           Role?               @relation(fields: [roleId], references: [id])
   owner          User                @relation(fields: [ownerId], references: [id])
   auditEvents    TaskAuditEvent[]
+  comments       TaskComment[]
   knowledgeLinks TaskKnowledgeItem[]
   tags           TaskTag[]
 
   @@index([status])
+  @@index([parentTaskId])
+  @@index([recurrencePreviousTaskId])
   @@index([projectId])
   @@index([sectionId])
+  @@index([scheduledFor])
   @@index([dueAt])
+  @@index([deadlineAt])
   @@index([archivedAt])
   @@index([sourceType])
   @@index([ownerId, sourceType])
   @@index([updatedAt])
   @@unique([ownerId, sourceType, sourceKey])
+}
+
+model TaskComment {
+  id           String   @id @default(cuid())
+  taskId       String
+  authorId     String
+  bodyMarkdown String
+  createdAt    DateTime @default(now())
+  updatedAt    DateTime @updatedAt
+  task         Task     @relation(fields: [taskId], references: [id], onDelete: Cascade)
+  author       User     @relation(fields: [authorId], references: [id], onDelete: Cascade)
+
+  @@index([taskId, createdAt])
+  @@index([authorId, createdAt])
 }
 
 model TaskAuditEvent {

@@ -93,6 +93,9 @@ const projectWorkspaceSelect = {
     },
     orderBy: [
       {
+        sortOrder: "asc",
+      },
+      {
         dueAt: "asc",
       },
       {
@@ -101,11 +104,29 @@ const projectWorkspaceSelect = {
     ],
     select: {
       id: true,
+      parentTaskId: true,
       title: true,
       status: true,
       priority: true,
       dueAt: true,
       blockedReason: true,
+      parentTask: {
+        select: {
+          id: true,
+          title: true,
+        },
+      },
+      tags: {
+        select: {
+          tag: {
+            select: {
+              id: true,
+              name: true,
+              slug: true,
+            },
+          },
+        },
+      },
       section: {
         select: {
           id: true,

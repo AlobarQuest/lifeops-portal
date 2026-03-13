@@ -14,13 +14,13 @@ That means other apps should create, update, complete, and read tasks through Li
 
 ## Current Production State
 
-As of 2026-03-10, the first task API pass is live.
+As of 2026-03-13, the current task API pass is live.
 
 Implemented:
 
 - database-backed `/tasks` page
 - quick task capture in the UI
-- inline browser task editing, project and section reassignment, and archive controls on `/tasks`
+- browser task detail drawer with full-task editing, comments, manual ordering, project and section reassignment, and archive controls on `/tasks`
 - task completion and reopen actions
 - owner-scoped task queries through Prisma
 - first protected task API route at `/api/tasks`
@@ -30,19 +30,25 @@ Implemented:
 - source filters on `GET /api/tasks`
 - path-based task routes for `GET /api/tasks/:id`, `PATCH /api/tasks/:id`, `POST /api/tasks/:id/complete`, `POST /api/tasks/:id/reopen`, and `POST /api/tasks/:id/archive`
 - task soft-archive support through `archivedAt`
+- parent-task nesting through `parentTaskId`
+- task labels through the existing `Tag` / `TaskTag` join model
+- richer scheduling fields through `scheduledFor`, `deadlineAt`, and `durationMinutes`
+- recurring task cadence through enum-based `recurrenceRule`
+- recurring completion now creates the next occurrence and moves source-aware lookup onto the active recurring task
 - project helper route at `/api/task-projects` for list, lookup, create, and update flows
 - section helper route at `/api/task-sections` for list, lookup, create, and update flows
+- label helper route at `/api/task-labels` for list and lookup flows
+- comment helper route at `/api/tasks/:id/comments` for list and create flows
 - `npm run test:integration` covers the core task route flows against a real local PostgreSQL database
 - task API writes now create `TaskAuditEvent` rows with auth and request context snapshots
 - `npm run smoke:task-api` provides a real bearer-token HTTP verification path for the first external caller rollout
+- production bearer-token smoke passed against `https://portal.devonwatkins.com` on 2026-03-13
 
 Not implemented yet:
 
-- dedicated task comments
-- recurring task rules
 - external source reference tables
 - idempotency keys
-- broader machine-to-machine auth rollout
+- per-caller auth separation beyond the shared internal token
 
 ## Current Auth Model
 
@@ -59,9 +65,9 @@ Other applications should authenticate with:
 - `Authorization: Bearer <INTERNAL_API_TOKEN>`
 - or `x-lifeops-token: <INTERNAL_API_TOKEN>`
 
-Current requirement:
+Current production state:
 
-- `INTERNAL_API_TOKEN` must be defined in Coolify before external applications can use this path
+- `INTERNAL_API_TOKEN` is configured in Coolify and validated through the production smoke client
 
 ## Current API Surface
 
@@ -77,8 +83,13 @@ Supported query params:
 
 - `view`: `all`, `inbox`, `today`, `overdue`, `blocked`, `completed`
 - `status`
+- `recurrenceRule`
+- `recurring`
 - `projectId`
 - `sectionId`
+- `parentTaskId`
+- `label`
+- `labelId`
 - `sourceType`
 - `sourceKey`
 - `includeArchived`
@@ -99,6 +110,9 @@ Accepted aliases:
 - `externalSource`
 - `externalKey`
 - `include_archived`
+- `parent_task_id`
+- `label_id`
+- `recurrence_rule`
 
 ### `POST /api/tasks`
 
@@ -112,9 +126,16 @@ Current accepted fields:
 - `description`
 - `priority`
 - `status`
+- `scheduledFor`
 - `dueOn`
+- `deadlineOn`
+- `durationMinutes`
+- `recurrenceRule`
+- `sortOrder`
 - `projectId`
 - `sectionId`
+- `parentTaskId`
+- `labels`
 - `sourceType`
 - `sourceKey`
 
@@ -124,6 +145,12 @@ Accepted aliases for external callers:
 - `source_key`
 - `externalSource`
 - `externalKey`
+- `parent_task_id`
+- `scheduled_for`
+- `deadline_on`
+- `duration_minutes`
+- `recurrence_rule`
+- `sort_order`
 
 ### `PATCH /api/tasks`
 
@@ -141,9 +168,16 @@ Current accepted fields:
 - `description`
 - `priority`
 - `status`
+- `scheduledFor`
 - `dueOn`
+- `deadlineOn`
+- `durationMinutes`
+- `recurrenceRule`
+- `sortOrder`
 - `projectId`
 - `sectionId`
+- `parentTaskId`
+- `labels`
 - `blockedReason`
 - `mode`
 
@@ -155,6 +189,12 @@ Accepted aliases for external callers:
 - `externalKey`
 - `project_id`
 - `section_id`
+- `parent_task_id`
+- `scheduled_for`
+- `deadline_on`
+- `duration_minutes`
+- `recurrence_rule`
+- `sort_order`
 - `due_on`
 - `blocked_reason`
 
@@ -189,23 +229,77 @@ Accepted fields:
 - `description`
 - `priority`
 - `status`
+- `scheduledFor`
 - `dueOn`
+- `deadlineOn`
+- `durationMinutes`
+- `recurrenceRule`
+- `sortOrder`
 - `projectId`
 - `sectionId`
+- `parentTaskId`
+- `labels`
 - `blockedReason`
 
 Accepted aliases:
 
 - `project_id`
 - `section_id`
+- `parent_task_id`
+- `scheduled_for`
+- `deadline_on`
+- `duration_minutes`
+- `recurrence_rule`
+- `sort_order`
 - `due_on`
 - `blocked_reason`
+
+### `GET /api/tasks/:id/comments`
+
+Purpose:
+
+- list task comments for one task
+
+Returned fields:
+
+- `id`
+- `bodyMarkdown`
+- `author`
+- `createdAt`
+- `updatedAt`
+
+### `POST /api/tasks/:id/comments`
+
+Purpose:
+
+- create a task comment
+
+Current accepted fields:
+
+- `bodyMarkdown`
+
+Accepted aliases:
+
+- `body_markdown`
+- `body`
+- `comment`
+
+### `GET /api/task-labels`
+
+Purpose:
+
+- list existing task labels used by the owner
+- optionally fetch one label by `id`
 
 ### `POST /api/tasks/:id/complete`
 
 Purpose:
 
 - mark a task done by path id
+
+Recurring behavior:
+
+- recurring tasks return `task` for the completed occurrence plus `nextTask` for the generated active occurrence
 
 ### `POST /api/tasks/:id/reopen`
 
@@ -358,9 +452,22 @@ Returned task objects currently expose:
 - `statusLabel`
 - `priority`
 - `priorityLabel`
+- `scheduledFor`
+- `scheduledLabel`
 - `dueAt`
 - `dueLabel`
+- `deadlineAt`
+- `deadlineLabel`
+- `durationMinutes`
+- `durationLabel`
+- `recurrenceRule`
+- `recurrenceLabel`
+- `sortOrder`
 - `blockedReason`
+- `parentTaskId`
+- `labels`
+- `commentCount`
+- `comments`
 - `sourceType`
 - `sourceKey`
 - `project`
@@ -377,9 +484,8 @@ This is enough for a first internal client, but it is not yet a long-term stable
 
 Still needed:
 
-- set `INTERNAL_API_TOKEN` in Coolify
-- document token rotation
-- define which internal apps are allowed to use it
+- define which internal apps are allowed to use the shared token
+- decide whether the single shared token should stay or be replaced by per-caller credentials
 
 ### 2. Richer source attribution and external refs
 
@@ -402,8 +508,8 @@ Still needed:
 
 Still needed:
 
-- parent/sub-task support
-- labels and richer scheduling metadata
+- saved filters
+- richer comment-specific audit/history if route-level provenance becomes important
 
 ### 5. Auditability
 
@@ -420,10 +526,10 @@ Current state:
 
 ### Phase A: Make the current API usable for one internal caller
 
-- add `INTERNAL_API_TOKEN` in Coolify
-- run the bearer-token smoke client against production
-- hand one known-good client example to the first caller
-- verify the resulting `TaskAuditEvent` rows look correct
+- status: complete on 2026-03-13
+- `INTERNAL_API_TOKEN` is live in Coolify
+- production smoke passed against `https://portal.devonwatkins.com`
+- a known-good caller example exists in `docs/task-api-first-caller-runbook.md`
 
 Exit criteria:
 
@@ -433,7 +539,7 @@ Exit criteria:
 
 - add parent/sub-task support
 - add labels and recurring logic
-- add task comments and richer external refs
+- add task comments, manual ordering, and richer external refs
 
 Exit criteria:
 

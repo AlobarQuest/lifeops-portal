@@ -9,9 +9,14 @@ import { TaskQuickAddForm } from "@/components/task-quick-add-form";
 import { getCurrentUser } from "@/lib/current-user";
 import { listTaskSectionsForApi } from "@/lib/task-sections";
 import {
+  formatTaskDateInputValue,
+  formatTaskDeadlineLabel,
+  formatTaskDurationLabel,
   formatTaskDueLabel,
+  formatTaskScheduledLabel,
   getTaskCounts,
   getTaskPriorityLabel,
+  getTaskRecurrenceLabel,
   getTaskStatusLabel,
   getTaskViewLabel,
   listTaskProjects,
@@ -27,18 +32,6 @@ type TasksPageProps = {
 };
 
 const taskViews: TaskView[] = [...taskViewValues];
-
-function formatTaskDateInput(date: Date | null) {
-  if (!date) {
-    return undefined;
-  }
-
-  const year = date.getUTCFullYear();
-  const month = `${date.getUTCMonth() + 1}`.padStart(2, "0");
-  const day = `${date.getUTCDate()}`.padStart(2, "0");
-
-  return `${year}-${month}-${day}`;
-}
 
 function buildTasksHref(view: TaskView, includeArchived: boolean) {
   const params = new URLSearchParams();
@@ -82,17 +75,53 @@ export default async function TasksPage({ searchParams }: TasksPageProps) {
 
   const taskItems = tasks.map((task) => ({
     id: task.id,
+    sortOrder: task.sortOrder,
+    parentTaskId: task.parentTaskId,
     title: task.title,
     description: task.description,
     status: task.status,
     statusLabel: getTaskStatusLabel(task.status),
     priority: task.priority,
     priorityLabel: getTaskPriorityLabel(task.priority),
+    scheduledFor: formatTaskDateInputValue(task.scheduledFor),
+    scheduledLabel: formatTaskScheduledLabel(task.scheduledFor),
     dueLabel: formatTaskDueLabel(task.dueAt),
-    dueOn: formatTaskDateInput(task.dueAt),
+    dueOn: formatTaskDateInputValue(task.dueAt),
+    deadlineOn: formatTaskDateInputValue(task.deadlineAt),
+    deadlineLabel: formatTaskDeadlineLabel(task.deadlineAt),
+    durationMinutes: task.durationMinutes,
+    durationLabel: formatTaskDurationLabel(task.durationMinutes),
+    recurrenceRule: task.recurrenceRule,
+    recurrenceLabel: getTaskRecurrenceLabel(task.recurrenceRule),
     updatedAt: task.updatedAt.toISOString(),
     blockedReason: task.blockedReason,
     archivedAt: task.archivedAt?.toISOString() ?? null,
+    commentCount: task.comments.length,
+    comments: task.comments.map((comment) => ({
+      id: comment.id,
+      bodyMarkdown: comment.bodyMarkdown,
+      createdAt: comment.createdAt.toISOString(),
+      updatedAt: comment.updatedAt.toISOString(),
+      author: {
+        id: comment.author.id,
+        displayName: comment.author.displayName,
+        email: comment.author.email,
+      },
+    })),
+    labels: task.tags.map((taskTag) => ({
+      id: taskTag.tag.id,
+      name: taskTag.tag.name,
+      slug: taskTag.tag.slug,
+      color: taskTag.tag.color,
+    })),
+    parentTask: task.parentTask
+      ? {
+          id: task.parentTask.id,
+          title: task.parentTask.title,
+          status: task.parentTask.status,
+          statusLabel: getTaskStatusLabel(task.parentTask.status),
+        }
+      : null,
     project: task.project
       ? {
           id: task.project.id,
@@ -179,8 +208,8 @@ export default async function TasksPage({ searchParams }: TasksPageProps) {
           caption={
             tasks.length > 0
               ? includeArchived
-                ? "Active and archived tasks are visible in this query. Archive controls now keep older work out of the default execution views."
-                : "This list is now backed by the database instead of placeholder site data."
+                ? "Active and archived tasks are visible in this query. Labels and nested subtasks stay readable even when older work is archived."
+                : "This list is now backed by the database, including labels and nested subtasks."
               : includeArchived
                 ? "No tasks match this view, even with archived visibility enabled."
                 : "No tasks match this view yet. Capture one above to start replacing the external task system."

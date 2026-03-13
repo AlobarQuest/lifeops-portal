@@ -67,10 +67,10 @@ export async function POST(request: NextRequest, context: TaskRouteContext) {
 
       return updatedTask;
     });
-  } catch {
+  } catch (error) {
     return NextResponse.json(
-      { error: "Task not found." },
-      { status: 404 },
+      { error: error instanceof Error ? error.message : "Task not found." },
+      { status: error instanceof Error && error.message !== "Task not found." ? 400 : 404 },
     );
   }
 

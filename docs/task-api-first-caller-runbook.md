@@ -2,6 +2,12 @@
 
 This runbook covers the first production bearer-token rollout for LifeOps Portal task API clients.
 
+Current status on 2026-03-13:
+
+- `INTERNAL_API_TOKEN` is configured in Coolify
+- production smoke passed against `https://portal.devonwatkins.com`
+- the next caller can reuse this same verification path after token rotation or image updates
+
 ## Goal
 
 Verify that one external caller can create, update, complete, and archive a task through LifeOps Portal using `INTERNAL_API_TOKEN`.

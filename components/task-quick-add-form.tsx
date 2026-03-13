@@ -61,8 +61,18 @@ export function TaskQuickAddForm({ projectOptions }: TaskQuickAddFormProps) {
         </div>
 
         <div className="field">
+          <label htmlFor="scheduledFor">Scheduled for</label>
+          <input id="scheduledFor" name="scheduledFor" type="date" />
+        </div>
+
+        <div className="field">
           <label htmlFor="dueOn">Due date</label>
           <input id="dueOn" name="dueOn" type="date" />
+        </div>
+
+        <div className="field">
+          <label htmlFor="deadlineOn">Deadline</label>
+          <input id="deadlineOn" name="deadlineOn" type="date" />
         </div>
 
         <div className="field">
@@ -76,11 +86,32 @@ export function TaskQuickAddForm({ projectOptions }: TaskQuickAddFormProps) {
             ))}
           </select>
         </div>
+
+        <div className="field">
+          <label htmlFor="labels">Labels</label>
+          <input id="labels" name="labels" placeholder="ops, admin, portal" type="text" />
+        </div>
+
+        <div className="field">
+          <label htmlFor="durationMinutes">Estimate (minutes)</label>
+          <input id="durationMinutes" min={0} name="durationMinutes" placeholder="45" type="number" />
+        </div>
+
+        <div className="field">
+          <label htmlFor="recurrenceRule">Repeats</label>
+          <select defaultValue="" id="recurrenceRule" name="recurrenceRule">
+            <option value="">Does not repeat</option>
+            <option value="DAILY">Daily</option>
+            <option value="WEEKDAYS">Weekdays</option>
+            <option value="WEEKLY">Weekly</option>
+            <option value="MONTHLY">Monthly</option>
+          </select>
+        </div>
       </div>
 
       <p className="support-text">
-        This is the first real task capture flow. Other applications should eventually use the same task domain through
-        the `/api/tasks` routes instead of writing to separate task tools.
+        Labels, subtasks, and recurring scheduling now live in the same task model. Other applications should
+        eventually use the `/api/tasks` routes instead of writing to separate task tools.
       </p>
 
       <button className="primary-button" disabled={isPending} type="submit">

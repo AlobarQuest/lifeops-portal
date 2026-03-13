@@ -541,6 +541,27 @@ select {
   opacity: 0.88;
 }
 
+.task-row-selected {
+  border-color: var(--line-strong);
+  box-shadow: 0 0 0 1px rgba(101, 238, 255, 0.16);
+}
+
+.task-row-subtask {
+  background:
+    linear-gradient(135deg, rgba(101, 238, 255, 0.04), transparent 22%),
+    rgba(8, 14, 28, 0.82);
+}
+
+.task-branch-nested {
+  position: relative;
+}
+
+.task-subtasks {
+  display: grid;
+  gap: 0.85rem;
+  margin-top: 0.85rem;
+}
+
 .project-list-item {
   display: flex;
   align-items: flex-start;
@@ -651,7 +672,17 @@ select {
   border-top: 1px solid var(--line);
 }
 
+.task-subtask-form {
+  min-width: min(26rem, 100%);
+}
+
 .task-edit-actions {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 0.75rem;
+}
+
+.task-inline-actions {
   display: flex;
   flex-wrap: wrap;
   gap: 0.75rem;
@@ -660,6 +691,121 @@ select {
 .task-archived-note {
   max-width: 18rem;
   text-align: right;
+}
+
+.task-drawer-shell {
+  position: fixed;
+  inset: 0;
+  z-index: 60;
+  pointer-events: none;
+}
+
+.task-drawer-backdrop {
+  position: absolute;
+  inset: 0;
+  border: none;
+  background: rgba(3, 7, 14, 0.7);
+  backdrop-filter: blur(4px);
+  pointer-events: auto;
+}
+
+.task-drawer-panel {
+  position: absolute;
+  top: 0;
+  right: 0;
+  bottom: 0;
+  width: min(720px, 100vw);
+  padding: 1.25rem;
+  overflow-y: auto;
+  border-left: 1px solid var(--line);
+  background:
+    linear-gradient(180deg, rgba(101, 238, 255, 0.08), transparent 18%),
+    rgba(7, 13, 25, 0.98);
+  box-shadow: -24px 0 60px rgba(0, 0, 0, 0.32);
+  pointer-events: auto;
+}
+
+.task-drawer-header {
+  display: flex;
+  align-items: flex-start;
+  justify-content: space-between;
+  gap: 1rem;
+}
+
+.task-drawer-eyebrow {
+  margin: 0 0 0.35rem;
+  color: var(--signal);
+  font-family: var(--mono);
+  font-size: 0.78rem;
+  letter-spacing: 0.18em;
+  text-transform: uppercase;
+}
+
+.task-drawer-header h3 {
+  margin: 0;
+  font-family: var(--display);
+  font-size: 2rem;
+  line-height: 0.95;
+  letter-spacing: 0.03em;
+  text-transform: uppercase;
+}
+
+.task-drawer-meta {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 0.5rem;
+  margin-top: 1rem;
+}
+
+.task-drawer-section {
+  display: grid;
+  gap: 1rem;
+  margin-top: 1.2rem;
+  padding-top: 1.2rem;
+  border-top: 1px solid var(--line);
+}
+
+.task-drawer-section-heading {
+  display: flex;
+  align-items: flex-start;
+  justify-content: space-between;
+  gap: 1rem;
+}
+
+.task-drawer-form {
+  gap: 1rem;
+}
+
+.task-comment-list {
+  display: grid;
+  gap: 0.85rem;
+}
+
+.task-comment-item {
+  display: grid;
+  gap: 0.45rem;
+  padding: 0.95rem 1rem;
+  border: 1px solid var(--line);
+  border-radius: var(--radius-sm);
+  background: rgba(7, 13, 25, 0.86);
+}
+
+.task-comment-item p {
+  margin: 0;
+}
+
+.task-comment-meta {
+  display: flex;
+  flex-wrap: wrap;
+  justify-content: space-between;
+  gap: 0.5rem;
+  color: var(--muted);
+  font-family: var(--mono);
+  font-size: 0.82rem;
+}
+
+.task-comment-form textarea {
+  min-height: 120px;
 }
 
 .secondary-inline-button {
@@ -774,5 +920,16 @@ select {
     min-width: 0;
     width: 100%;
     text-align: left;
+  }
+
+  .task-drawer-panel {
+    width: 100vw;
+    padding: 1rem;
+  }
+
+  .task-drawer-header,
+  .task-drawer-section-heading,
+  .task-comment-meta {
+    flex-direction: column;
   }
 }

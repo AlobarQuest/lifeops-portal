@@ -54,3 +54,35 @@ jobs:
           labels: ${{ steps.meta.outputs.labels }}
           cache-from: type=gha
           cache-to: type=gha,mode=max
+
+      - name: Trigger Coolify deploy
+        if: ${{ success() }}
+        env:
+          COOLIFY_TOKEN: ${{ secrets.COOLIFY_TOKEN }}
+          COOLIFY_WEBHOOK: ${{ secrets.COOLIFY_WEBHOOK }}
+        run: |
+          set -euo pipefail
+
+          if [ -z "${COOLIFY_WEBHOOK}" ] || [ -z "${COOLIFY_TOKEN}" ]; then
+            echo "::error title=Missing Coolify deploy secrets::Set COOLIFY_WEBHOOK and COOLIFY_TOKEN as repository action secrets."
+            exit 1
+          fi
+
+          echo "Image push completed successfully. Triggering Coolify deploy..."
+
+          http_code="$(
+            curl --silent --show-error \
+              --output /tmp/coolify_deploy_response \
+              --write-out '%{http_code}' \
+              --request GET "${COOLIFY_WEBHOOK}" \
+              --header "Authorization: Bearer ${COOLIFY_TOKEN}"
+          )"
+
+          if [ "${http_code}" -lt 200 ] || [ "${http_code}" -ge 300 ]; then
+            echo "::error title=Coolify deploy webhook failed::Webhook returned HTTP ${http_code}."
+            echo "Response body:"
+            cat /tmp/coolify_deploy_response
+            exit 1
+          fi
+
+          echo "Coolify deploy webhook accepted with HTTP ${http_code}."
